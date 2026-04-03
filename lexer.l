@@ -10,8 +10,10 @@
 #include "parser.tab.h"
 
 int line_no = 1;
+int nebula_lex_error = 0;
 
 static void lex_error(const char *text) {
+    nebula_lex_error = 1;
     fprintf(stderr, "Lexical Error at line %d: invalid token '%s'\n", line_no, text);
 }
 %}
@@ -27,15 +29,33 @@ INT_LIT         {DIGIT}+
 EXP             [eE][+-]?{DIGIT}+
 FLOAT_LIT       ({DIGIT}+\.{DIGIT}+({EXP})?)|(\.{DIGIT}+({EXP})?)|({DIGIT}+{EXP})
 CHAR_LIT        '\\?.'
+STRING_LIT      \"([^\\\n]|\\.)*\"
 WS              [ \t\r]+
 
 %%
 
-/* ---------- Keywords ---------- */
+"int"               { return INT; }
+"float"             { return FLOAT; }
+"double"            { return DOUBLE; }
 "num"               { return NUM; }
 "dec"               { return DEC; }
 "char"              { return CHAR; }
 "bool"              { return BOOL; }
+"void"              { return VOID; }
+"struct"            { return STRUCT; }
+"enum"              { return ENUM; }
+"if"                { return IF; }
+"else"              { return ELSE; }
+"switch"            { return SWITCH; }
+"case"              { return CASE; }
+"default"           { return DEFAULT; }
+"while"             { return WHILE; }
+"do"                { return DO; }
+"for"               { return FOR; }
+"break"             { return BREAK; }
+"continue"          { return CONTINUE; }
+"return"            { return RETURN; }
+"function"          { return FUNCTION; }
 "when"              { return WHEN; }
 "otherwise"         { return OTHERWISE; }
 "loop"              { return LOOP; }
@@ -45,28 +65,42 @@ WS              [ \t\r]+
 "true"              { return TRUE; }
 "false"             { return FALSE; }
 
-/* ---------- Operators ---------- */
+"++"                { return INC; }
+"--"                { return DECREMENT; }
+"=="                { return EQ; }
+"!="                { return NEQ; }
+"<="                { return LE; }
+">="                { return GE; }
+"&&"                { return AND; }
+"||"                { return OR; }
+"<<"                { return LSHIFT; }
+">>"                { return RSHIFT; }
+"~>"                { return ARROW_R; }
+"<~"                { return ARROW_L; }
 "+"                 { return PLUS; }
 "-"                 { return MINUS; }
 "*"                 { return MUL; }
 "/"                 { return DIV; }
 "="                 { return ASSIGN; }
-"=="                { return EQ; }
-"!="                { return NEQ; }
-"<="                { return LE; }
-">="                { return GE; }
 "<"                 { return LT; }
 ">"                 { return GT; }
+"&"                 { return BIT_AND; }
+"|"                 { return BIT_OR; }
+"^"                 { return BIT_XOR; }
+"~"                 { return BIT_NOT; }
+"!"                 { return NOT; }
+"?"                 { return QMARK; }
+":"                 { return COLON; }
 
-/* ---------- Delimiters ---------- */
 ";"                 { return SEMICOLON; }
 ","                 { return COMMA; }
 "("                 { return LPAREN; }
 ")"                 { return RPAREN; }
 "{"                 { return LBRACE; }
 "}"                 { return RBRACE; }
+"["                 { return LBRACKET; }
+"]"                 { return RBRACKET; }
 
-/* ---------- Literals ---------- */
 {FLOAT_LIT}         {
                         yylval.dec_val = strtod(yytext, NULL);
                         return DEC_LITERAL;
@@ -90,22 +124,22 @@ WS              [ \t\r]+
                         }
                         return CHAR_LITERAL;
                     }
+{STRING_LIT}        {
+                        yylval.str_val = strdup(yytext);
+                        return STRING_LITERAL;
+                    }
 
-/* ---------- Identifier ---------- */
 {ID}                {
                         yylval.str_val = strdup(yytext);
                         return IDENTIFIER;
                     }
 
-/* ---------- Comments ---------- */
 "//"[^\n]*         { /* Skip single-line comment. */ }
 "/*"([^*]|\*+[^*/])*\*+"/"  { /* Skip multi-line comment. */ }
 
-/* ---------- Whitespace / Newline ---------- */
 {WS}                { /* Ignore spaces/tabs. */ }
 \n                  { line_no++; }
 
-/* ---------- Invalid Token ---------- */
 .                   {
                         lex_error(yytext);
                         return INVALID;

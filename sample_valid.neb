@@ -1,0 +1,6 @@
+num x = 10;
+when (x > 0) {
+    print("ok", x);
+} otherwise {
+    print("bad");
+}
