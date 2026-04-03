@@ -1,0 +1,28 @@
+print("Temperature Converter");
+print("1 = Celsius to Fahrenheit");
+print("2 = Fahrenheit to Celsius");
+
+num mode;
+input(mode);
+
+when (mode == 1) {
+    dec c;
+    print("Enter Celsius:");
+    input(c);
+
+    dec f = (c * 9) / 5 + 32;
+    print("Fahrenheit:");
+    print(f);
+} otherwise {
+    when (mode == 2) {
+        dec f;
+        print("Enter Fahrenheit:");
+        input(f);
+
+        dec c = (f - 32) * 5 / 9;
+        print("Celsius:");
+        print(c);
+    } otherwise {
+        print("Invalid option");
+    }
+}

@@ -1,0 +1,9 @@
+num sum = 0;
+num i = 1;
+
+loop (i <= 5) {
+    sum = sum + i;
+    i = i + 1;
+}
+
+display(sum);

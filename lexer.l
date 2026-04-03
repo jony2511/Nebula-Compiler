@@ -66,11 +66,13 @@ WS              [ \t\r]+
 "continue"          { return CONTINUE; }
 "return"            { return RETURN; }
 "function"          { return FUNCTION; }
+"task"              { return FUNCTION; }
 "when"              { return WHEN; }
 "otherwise"         { return OTHERWISE; }
 "loop"              { return LOOP; }
 "give"              { return GIVE; }
 "print"             { return PRINT; }
+"display"           { return PRINT; }
 "input"             { return INPUT; }
 "true"              { return TRUE; }
 "false"             { return FALSE; }

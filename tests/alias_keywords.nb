@@ -1,0 +1,8 @@
+task num add(num a, num b) {
+    give a + b;
+}
+
+num x = 7;
+num y = add(x, 8);
+display("Result:");
+display(y);

@@ -72,7 +72,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdarg.h>
+#include "ast.h"
+#include "semantic.h"
 
 extern int yylex(void);
 extern int line_no;
@@ -81,150 +82,12 @@ extern FILE *yyin;
 extern int nebula_lex_error;
 
 int nebula_parse_error = 0;
-int semantic_error_count = 0;
-
-typedef enum {
-    TYPE_UNKNOWN = 0,
-    TYPE_NUM,
-    TYPE_DEC,
-    TYPE_CHAR,
-    TYPE_BOOL,
-    TYPE_VOID
-} NebulaType;
-
-typedef enum {
-    AST_PROGRAM = 0,
-    AST_STMT_LIST,
-    AST_DECL,
-    AST_ASSIGN,
-    AST_EXPR_STMT,
-    AST_IF,
-    AST_LOOP,
-    AST_WHILE,
-    AST_DO_WHILE,
-    AST_FOR,
-    AST_PRINT,
-    AST_INPUT,
-    AST_BINOP,
-    AST_UNARYOP,
-    AST_LITERAL,
-    AST_IDENTIFIER,
-    AST_FUNC_CALL
-} ASTNodeType;
-
-typedef struct ASTNode {
-    ASTNodeType kind;
-    NebulaType inferred_type;
-    char *text;
-    struct ASTNode *left;
-    struct ASTNode *right;
-    struct ASTNode *third;
-    struct ASTNode *body;
-    struct ASTNode *next;
-} ASTNode;
-
-typedef struct ExprAttr ExprAttr;
-
-typedef struct {
-    NebulaType type;
-    int num;
-    double dec;
-    char ch;
-    int boolean;
-    char *str;
-} RuntimeValue;
-
-typedef struct RuntimeVar {
-    char *name;
-    RuntimeValue value;
-    int scope;
-    struct RuntimeVar *next;
-} RuntimeVar;
-
-typedef struct FunctionDef {
-    char *name;
-    ASTNode *params;
-    ASTNode *body;
-    NebulaType return_type;
-    struct FunctionDef *next;
-} FunctionDef;
-
-typedef struct {
-    int has_return;
-    int has_break;
-    int has_continue;
-    RuntimeValue return_value;
-} ExecSignal;
-
-typedef struct Symbol {
-    char *name;
-    NebulaType type;
-    int scope;
-    struct Symbol *next;
-} Symbol;
-
-static Symbol *symbol_table = NULL;
-static int current_scope = 0;
 static NebulaType current_decl_type = TYPE_UNKNOWN;
 static ASTNode *ast_root = NULL;
-static RuntimeVar *runtime_env = NULL;
-static FunctionDef *function_table = NULL;
-static int runtime_scope = 0;
-
-static const char *type_name(NebulaType t);
-static int is_numeric(NebulaType t);
-static int is_truthy_compatible(NebulaType t);
-static void semantic_error(int line, const char *fmt, ...);
-static void enter_scope(void);
-static void exit_scope(void);
-static Symbol *lookup_symbol(const char *name);
-static Symbol *lookup_symbol_current_scope(const char *name);
-static void declare_variable(const char *name, NebulaType type, int line);
-static NebulaType resolve_identifier_type(const char *name, int line);
-static int is_assignment_compatible(NebulaType lhs, NebulaType rhs);
-static NebulaType arithmetic_result_type(NebulaType lhs, NebulaType rhs, const char *op, int line);
-static NebulaType equality_result_type(NebulaType lhs, NebulaType rhs, const char *op, int line);
-static NebulaType relational_result_type(NebulaType lhs, NebulaType rhs, const char *op, int line);
-static NebulaType logical_result_type(NebulaType lhs, NebulaType rhs, const char *op, int line);
-static NebulaType bitwise_result_type(NebulaType lhs, NebulaType rhs, const char *op, int line);
-static NebulaType unary_plus_minus_type(NebulaType t, const char *op, int line);
-static NebulaType unary_not_type(NebulaType t, int line);
-static NebulaType unary_bitnot_type(NebulaType t, int line);
-static NebulaType incdec_type(NebulaType t, const char *op, int line);
-static void check_condition_type(NebulaType cond_type, int line, const char *kw);
-
-static ExprAttr make_expr(NebulaType type, ASTNode *node);
-static ASTNode *new_ast_node(ASTNodeType kind, const char *text);
-static ASTNode *new_ast_unary(ASTNodeType kind, const char *op, ASTNode *child, NebulaType t);
-static ASTNode *new_ast_binary(ASTNodeType kind, const char *op, ASTNode *lhs, ASTNode *rhs, NebulaType t);
-static ASTNode *append_node(ASTNode *list, ASTNode *node);
-static void print_ast(const ASTNode *node, int indent);
-static const char *ast_kind_name(ASTNodeType kind);
-static RuntimeValue make_default_value(NebulaType t);
-static RuntimeValue runtime_copy_value(RuntimeValue v);
-static RuntimeVar *runtime_lookup_var(const char *name);
-static RuntimeVar *runtime_lookup_var_current_scope(const char *name);
-static void runtime_enter_scope(void);
-static void runtime_exit_scope(void);
-static void runtime_declare_var(const char *name, RuntimeValue v);
-static void runtime_set_var(const char *name, RuntimeValue v);
-static RuntimeValue runtime_get_var(const char *name);
-static int runtime_is_truthy(RuntimeValue v);
-static RuntimeValue runtime_from_int(int n);
-static RuntimeValue runtime_from_double(double d);
-static RuntimeValue runtime_from_bool(int b);
-static RuntimeValue runtime_cast_to(NebulaType t, RuntimeValue v);
-static RuntimeValue runtime_eval_expr(ASTNode *node);
-static ExecSignal runtime_exec_node(ASTNode *node);
-static ExecSignal runtime_exec_list(ASTNode *node);
-static void runtime_register_functions(ASTNode *root);
-static FunctionDef *runtime_find_function(const char *name);
-static RuntimeValue runtime_call_function(const char *name, ASTNode *args);
-static void execute_program(ASTNode *root);
 
 void yyerror(const char *msg);
 
-#line 228 "parser.tab.c"
+#line 91 "parser.tab.c"
 
 # ifndef YY_CAST
 #  ifdef __cplusplus
@@ -771,19 +634,19 @@ static const yytype_int8 yytranslate[] =
 /* YYRLINE[YYN] -- Source line where rule number YYN was defined.  */
 static const yytype_int16 yyrline[] =
 {
-       0,   244,   244,   254,   257,   264,   268,   276,   275,   293,
-     296,   303,   307,   314,   325,   326,   327,   328,   329,   330,
-     331,   332,   337,   336,   351,   354,   361,   365,   372,   376,
-     380,   384,   388,   392,   396,   400,   410,   409,   420,   424,
-     431,   439,   454,   460,   467,   475,   484,   492,   501,   513,
-     516,   523,   534,   537,   546,   554,   566,   574,   582,   598,
-     601,   608,   614,   620,   624,   631,   637,   648,   651,   658,
-     662,   669,   676,   687,   690,   697,   701,   708,   715,   719,
-     737,   741,   763,   767,   775,   779,   787,   791,   799,   803,
-     811,   815,   823,   827,   832,   840,   844,   849,   854,   859,
-     867,   871,   876,   884,   888,   893,   901,   905,   910,   918,
-     922,   927,   932,   937,   942,   947,   955,   959,   964,   969,
-     980,   988,   994,  1000,  1006,  1011,  1015,  1019,  1023,  1027
+       0,   103,   103,   113,   116,   123,   127,   135,   134,   152,
+     155,   162,   166,   173,   184,   185,   186,   187,   188,   189,
+     190,   191,   196,   195,   210,   213,   220,   224,   231,   235,
+     239,   243,   247,   251,   255,   259,   269,   268,   279,   283,
+     290,   298,   313,   319,   326,   334,   343,   351,   360,   372,
+     375,   382,   393,   396,   405,   413,   425,   433,   441,   457,
+     460,   467,   473,   479,   483,   490,   496,   507,   510,   517,
+     521,   528,   535,   546,   549,   556,   560,   567,   574,   578,
+     596,   600,   622,   626,   634,   638,   646,   650,   658,   662,
+     670,   674,   682,   686,   691,   699,   703,   708,   713,   718,
+     726,   730,   735,   743,   747,   752,   760,   764,   769,   777,
+     781,   786,   791,   796,   801,   806,   814,   818,   823,   828,
+     839,   847,   853,   859,   865,   870,   874,   878,   882,   886
 };
 #endif
 
@@ -1845,57 +1708,57 @@ yyreduce:
   switch (yyn)
     {
   case 2: /* program: translation_unit  */
-#line 245 "parser.y"
+#line 104 "parser.y"
       {
           ast_root = new_ast_node(AST_PROGRAM, "program");
           ast_root->left = (yyvsp[0].node);
           (yyval.node) = ast_root;
       }
-#line 1855 "parser.tab.c"
+#line 1718 "parser.tab.c"
     break;
 
   case 3: /* translation_unit: %empty  */
-#line 254 "parser.y"
+#line 113 "parser.y"
       {
           (yyval.node) = NULL;
       }
-#line 1863 "parser.tab.c"
+#line 1726 "parser.tab.c"
     break;
 
   case 4: /* translation_unit: translation_unit external_decl  */
-#line 258 "parser.y"
+#line 117 "parser.y"
       {
           (yyval.node) = append_node((yyvsp[-1].node), (yyvsp[0].node));
       }
-#line 1871 "parser.tab.c"
+#line 1734 "parser.tab.c"
     break;
 
   case 5: /* external_decl: function_def  */
-#line 265 "parser.y"
+#line 124 "parser.y"
       {
           (yyval.node) = (yyvsp[0].node);
       }
-#line 1879 "parser.tab.c"
+#line 1742 "parser.tab.c"
     break;
 
   case 6: /* external_decl: statement  */
-#line 269 "parser.y"
+#line 128 "parser.y"
       {
           (yyval.node) = (yyvsp[0].node);
       }
-#line 1887 "parser.tab.c"
+#line 1750 "parser.tab.c"
     break;
 
   case 7: /* $@1: %empty  */
-#line 276 "parser.y"
+#line 135 "parser.y"
       {
           enter_scope();
       }
-#line 1895 "parser.tab.c"
+#line 1758 "parser.tab.c"
     break;
 
   case 8: /* function_def: FUNCTION type_spec IDENTIFIER LPAREN $@1 parameter_list_opt RPAREN compound_stmt  */
-#line 280 "parser.y"
+#line 139 "parser.y"
       {
           ASTNode *fn = new_ast_node(AST_FUNC_CALL, (yyvsp[-5].str_val));
           fn->inferred_type = (NebulaType)(yyvsp[-6].type_val);
@@ -1905,43 +1768,43 @@ yyreduce:
           exit_scope();
           free((yyvsp[-5].str_val));
       }
-#line 1909 "parser.tab.c"
+#line 1772 "parser.tab.c"
     break;
 
   case 9: /* parameter_list_opt: %empty  */
-#line 293 "parser.y"
+#line 152 "parser.y"
       {
           (yyval.node) = NULL;
       }
-#line 1917 "parser.tab.c"
+#line 1780 "parser.tab.c"
     break;
 
   case 10: /* parameter_list_opt: parameter_list  */
-#line 297 "parser.y"
+#line 156 "parser.y"
       {
           (yyval.node) = (yyvsp[0].node);
       }
-#line 1925 "parser.tab.c"
+#line 1788 "parser.tab.c"
     break;
 
   case 11: /* parameter_list: parameter  */
-#line 304 "parser.y"
+#line 163 "parser.y"
       {
           (yyval.node) = (yyvsp[0].node);
       }
-#line 1933 "parser.tab.c"
+#line 1796 "parser.tab.c"
     break;
 
   case 12: /* parameter_list: parameter_list COMMA parameter  */
-#line 308 "parser.y"
+#line 167 "parser.y"
       {
           (yyval.node) = append_node((yyvsp[-2].node), (yyvsp[0].node));
       }
-#line 1941 "parser.tab.c"
+#line 1804 "parser.tab.c"
     break;
 
   case 13: /* parameter: type_spec IDENTIFIER  */
-#line 315 "parser.y"
+#line 174 "parser.y"
       {
           ASTNode *id = new_ast_node(AST_IDENTIFIER, (yyvsp[0].str_val));
           id->inferred_type = (NebulaType)(yyvsp[-1].type_val);
@@ -1949,208 +1812,208 @@ yyreduce:
           (yyval.node) = id;
           free((yyvsp[0].str_val));
       }
-#line 1953 "parser.tab.c"
+#line 1816 "parser.tab.c"
     break;
 
   case 14: /* type_spec: NUM  */
-#line 325 "parser.y"
+#line 184 "parser.y"
                  { (yyval.type_val) = TYPE_NUM; }
-#line 1959 "parser.tab.c"
+#line 1822 "parser.tab.c"
     break;
 
   case 15: /* type_spec: DEC  */
-#line 326 "parser.y"
+#line 185 "parser.y"
                  { (yyval.type_val) = TYPE_DEC; }
-#line 1965 "parser.tab.c"
+#line 1828 "parser.tab.c"
     break;
 
   case 16: /* type_spec: CHAR  */
-#line 327 "parser.y"
+#line 186 "parser.y"
                  { (yyval.type_val) = TYPE_CHAR; }
-#line 1971 "parser.tab.c"
+#line 1834 "parser.tab.c"
     break;
 
   case 17: /* type_spec: BOOL  */
-#line 328 "parser.y"
+#line 187 "parser.y"
                  { (yyval.type_val) = TYPE_BOOL; }
-#line 1977 "parser.tab.c"
+#line 1840 "parser.tab.c"
     break;
 
   case 18: /* type_spec: VOID  */
-#line 329 "parser.y"
+#line 188 "parser.y"
                  { (yyval.type_val) = TYPE_VOID; }
-#line 1983 "parser.tab.c"
+#line 1846 "parser.tab.c"
     break;
 
   case 19: /* type_spec: INT  */
-#line 330 "parser.y"
+#line 189 "parser.y"
                  { (yyval.type_val) = TYPE_NUM; }
-#line 1989 "parser.tab.c"
+#line 1852 "parser.tab.c"
     break;
 
   case 20: /* type_spec: FLOAT  */
-#line 331 "parser.y"
+#line 190 "parser.y"
                  { (yyval.type_val) = TYPE_DEC; }
-#line 1995 "parser.tab.c"
+#line 1858 "parser.tab.c"
     break;
 
   case 21: /* type_spec: DOUBLE  */
-#line 332 "parser.y"
+#line 191 "parser.y"
                  { (yyval.type_val) = TYPE_DEC; }
-#line 2001 "parser.tab.c"
+#line 1864 "parser.tab.c"
     break;
 
   case 22: /* $@2: %empty  */
-#line 337 "parser.y"
+#line 196 "parser.y"
       {
           enter_scope();
       }
-#line 2009 "parser.tab.c"
+#line 1872 "parser.tab.c"
     break;
 
   case 23: /* compound_stmt: LBRACE $@2 stmt_list_opt RBRACE  */
-#line 341 "parser.y"
+#line 200 "parser.y"
       {
           ASTNode *list = new_ast_node(AST_STMT_LIST, "block");
           list->left = (yyvsp[-1].node);
           (yyval.node) = list;
           exit_scope();
       }
-#line 2020 "parser.tab.c"
+#line 1883 "parser.tab.c"
     break;
 
   case 24: /* stmt_list_opt: %empty  */
-#line 351 "parser.y"
+#line 210 "parser.y"
       {
           (yyval.node) = NULL;
       }
-#line 2028 "parser.tab.c"
+#line 1891 "parser.tab.c"
     break;
 
   case 25: /* stmt_list_opt: stmt_list  */
-#line 355 "parser.y"
+#line 214 "parser.y"
       {
           (yyval.node) = (yyvsp[0].node);
       }
-#line 2036 "parser.tab.c"
+#line 1899 "parser.tab.c"
     break;
 
   case 26: /* stmt_list: statement  */
-#line 362 "parser.y"
+#line 221 "parser.y"
       {
           (yyval.node) = (yyvsp[0].node);
       }
-#line 2044 "parser.tab.c"
+#line 1907 "parser.tab.c"
     break;
 
   case 27: /* stmt_list: stmt_list statement  */
-#line 366 "parser.y"
+#line 225 "parser.y"
       {
           (yyval.node) = append_node((yyvsp[-1].node), (yyvsp[0].node));
       }
-#line 2052 "parser.tab.c"
+#line 1915 "parser.tab.c"
     break;
 
   case 28: /* statement: declaration_stmt  */
-#line 373 "parser.y"
+#line 232 "parser.y"
       {
           (yyval.node) = (yyvsp[0].node);
       }
-#line 2060 "parser.tab.c"
+#line 1923 "parser.tab.c"
     break;
 
   case 29: /* statement: expression_stmt  */
-#line 377 "parser.y"
+#line 236 "parser.y"
       {
           (yyval.node) = (yyvsp[0].node);
       }
-#line 2068 "parser.tab.c"
+#line 1931 "parser.tab.c"
     break;
 
   case 30: /* statement: selection_stmt  */
-#line 381 "parser.y"
+#line 240 "parser.y"
       {
           (yyval.node) = (yyvsp[0].node);
       }
-#line 2076 "parser.tab.c"
+#line 1939 "parser.tab.c"
     break;
 
   case 31: /* statement: loop_stmt  */
-#line 385 "parser.y"
+#line 244 "parser.y"
       {
           (yyval.node) = (yyvsp[0].node);
       }
-#line 2084 "parser.tab.c"
+#line 1947 "parser.tab.c"
     break;
 
   case 32: /* statement: jump_stmt  */
-#line 389 "parser.y"
+#line 248 "parser.y"
       {
           (yyval.node) = (yyvsp[0].node);
       }
-#line 2092 "parser.tab.c"
+#line 1955 "parser.tab.c"
     break;
 
   case 33: /* statement: io_stmt  */
-#line 393 "parser.y"
+#line 252 "parser.y"
       {
           (yyval.node) = (yyvsp[0].node);
       }
-#line 2100 "parser.tab.c"
+#line 1963 "parser.tab.c"
     break;
 
   case 34: /* statement: compound_stmt  */
-#line 397 "parser.y"
+#line 256 "parser.y"
       {
           (yyval.node) = (yyvsp[0].node);
       }
-#line 2108 "parser.tab.c"
+#line 1971 "parser.tab.c"
     break;
 
   case 35: /* statement: error SEMICOLON  */
-#line 401 "parser.y"
+#line 260 "parser.y"
       {
           fprintf(stderr, "Recovered from syntax error at line %d.\n", line_no);
           yyerrok;
           (yyval.node) = NULL;
       }
-#line 2118 "parser.tab.c"
+#line 1981 "parser.tab.c"
     break;
 
   case 36: /* $@3: %empty  */
-#line 410 "parser.y"
+#line 269 "parser.y"
       {
           current_decl_type = (NebulaType)(yyvsp[0].type_val);
       }
-#line 2126 "parser.tab.c"
+#line 1989 "parser.tab.c"
     break;
 
   case 37: /* declaration_stmt: type_spec $@3 init_declarator_list SEMICOLON  */
-#line 414 "parser.y"
+#line 273 "parser.y"
       {
           (yyval.node) = (yyvsp[-1].node);
       }
-#line 2134 "parser.tab.c"
+#line 1997 "parser.tab.c"
     break;
 
   case 38: /* init_declarator_list: init_declarator  */
-#line 421 "parser.y"
+#line 280 "parser.y"
       {
           (yyval.node) = (yyvsp[0].node);
       }
-#line 2142 "parser.tab.c"
+#line 2005 "parser.tab.c"
     break;
 
   case 39: /* init_declarator_list: init_declarator_list COMMA init_declarator  */
-#line 425 "parser.y"
+#line 284 "parser.y"
       {
           (yyval.node) = append_node((yyvsp[-2].node), (yyvsp[0].node));
       }
-#line 2150 "parser.tab.c"
+#line 2013 "parser.tab.c"
     break;
 
   case 40: /* init_declarator: IDENTIFIER  */
-#line 432 "parser.y"
+#line 291 "parser.y"
       {
           ASTNode *decl = new_ast_node(AST_DECL, (yyvsp[0].str_val));
           decl->inferred_type = current_decl_type;
@@ -2158,11 +2021,11 @@ yyreduce:
           (yyval.node) = decl;
           free((yyvsp[0].str_val));
       }
-#line 2162 "parser.tab.c"
+#line 2025 "parser.tab.c"
     break;
 
   case 41: /* init_declarator: IDENTIFIER ASSIGN expression  */
-#line 440 "parser.y"
+#line 299 "parser.y"
       {
           ASTNode *decl = new_ast_node(AST_DECL, (yyvsp[-2].str_val));
           decl->inferred_type = current_decl_type;
@@ -2174,29 +2037,29 @@ yyreduce:
           (yyval.node) = decl;
           free((yyvsp[-2].str_val));
       }
-#line 2178 "parser.tab.c"
+#line 2041 "parser.tab.c"
     break;
 
   case 42: /* expression_stmt: expression SEMICOLON  */
-#line 455 "parser.y"
+#line 314 "parser.y"
       {
           ASTNode *st = new_ast_node(AST_EXPR_STMT, "expr");
           st->left = (yyvsp[-1].expr).node;
           (yyval.node) = st;
       }
-#line 2188 "parser.tab.c"
+#line 2051 "parser.tab.c"
     break;
 
   case 43: /* expression_stmt: SEMICOLON  */
-#line 461 "parser.y"
+#line 320 "parser.y"
       {
           (yyval.node) = NULL;
       }
-#line 2196 "parser.tab.c"
+#line 2059 "parser.tab.c"
     break;
 
   case 44: /* selection_stmt: WHEN LPAREN expression RPAREN statement  */
-#line 468 "parser.y"
+#line 327 "parser.y"
       {
           ASTNode *node = new_ast_node(AST_IF, "when");
           node->left = (yyvsp[-2].expr).node;
@@ -2204,11 +2067,11 @@ yyreduce:
           check_condition_type((yyvsp[-2].expr).type, line_no, "when");
           (yyval.node) = node;
       }
-#line 2208 "parser.tab.c"
+#line 2071 "parser.tab.c"
     break;
 
   case 45: /* selection_stmt: WHEN LPAREN expression RPAREN statement OTHERWISE statement  */
-#line 476 "parser.y"
+#line 335 "parser.y"
       {
           ASTNode *node = new_ast_node(AST_IF, "when-otherwise");
           node->left = (yyvsp[-4].expr).node;
@@ -2217,11 +2080,11 @@ yyreduce:
           check_condition_type((yyvsp[-4].expr).type, line_no, "when");
           (yyval.node) = node;
       }
-#line 2221 "parser.tab.c"
+#line 2084 "parser.tab.c"
     break;
 
   case 46: /* selection_stmt: IF LPAREN expression RPAREN statement  */
-#line 485 "parser.y"
+#line 344 "parser.y"
       {
           ASTNode *node = new_ast_node(AST_IF, "if");
           node->left = (yyvsp[-2].expr).node;
@@ -2229,11 +2092,11 @@ yyreduce:
           check_condition_type((yyvsp[-2].expr).type, line_no, "if");
           (yyval.node) = node;
       }
-#line 2233 "parser.tab.c"
+#line 2096 "parser.tab.c"
     break;
 
   case 47: /* selection_stmt: IF LPAREN expression RPAREN statement ELSE statement  */
-#line 493 "parser.y"
+#line 352 "parser.y"
       {
           ASTNode *node = new_ast_node(AST_IF, "if-else");
           node->left = (yyvsp[-4].expr).node;
@@ -2242,11 +2105,11 @@ yyreduce:
           check_condition_type((yyvsp[-4].expr).type, line_no, "if");
           (yyval.node) = node;
       }
-#line 2246 "parser.tab.c"
+#line 2109 "parser.tab.c"
     break;
 
   case 48: /* selection_stmt: SWITCH LPAREN expression RPAREN LBRACE case_clauses_opt default_clause_opt RBRACE  */
-#line 502 "parser.y"
+#line 361 "parser.y"
       {
           ASTNode *node = new_ast_node(AST_IF, "switch");
           node->left = (yyvsp[-5].expr).node;
@@ -2254,56 +2117,56 @@ yyreduce:
           node->third = (yyvsp[-1].node);
           (yyval.node) = node;
       }
-#line 2258 "parser.tab.c"
+#line 2121 "parser.tab.c"
     break;
 
   case 49: /* case_clauses_opt: %empty  */
-#line 513 "parser.y"
+#line 372 "parser.y"
       {
           (yyval.node) = NULL;
       }
-#line 2266 "parser.tab.c"
+#line 2129 "parser.tab.c"
     break;
 
   case 50: /* case_clauses_opt: case_clauses_opt case_clause  */
-#line 517 "parser.y"
+#line 376 "parser.y"
       {
           (yyval.node) = append_node((yyvsp[-1].node), (yyvsp[0].node));
       }
-#line 2274 "parser.tab.c"
+#line 2137 "parser.tab.c"
     break;
 
   case 51: /* case_clause: CASE expression COLON stmt_list_opt  */
-#line 524 "parser.y"
+#line 383 "parser.y"
       {
           ASTNode *node = new_ast_node(AST_IF, "case");
           node->left = (yyvsp[-2].expr).node;
           node->right = (yyvsp[0].node);
           (yyval.node) = node;
       }
-#line 2285 "parser.tab.c"
+#line 2148 "parser.tab.c"
     break;
 
   case 52: /* default_clause_opt: %empty  */
-#line 534 "parser.y"
+#line 393 "parser.y"
       {
           (yyval.node) = NULL;
       }
-#line 2293 "parser.tab.c"
+#line 2156 "parser.tab.c"
     break;
 
   case 53: /* default_clause_opt: DEFAULT COLON stmt_list_opt  */
-#line 538 "parser.y"
+#line 397 "parser.y"
       {
           ASTNode *node = new_ast_node(AST_IF, "default");
           node->right = (yyvsp[0].node);
           (yyval.node) = node;
       }
-#line 2303 "parser.tab.c"
+#line 2166 "parser.tab.c"
     break;
 
   case 54: /* loop_stmt: LOOP LPAREN expression RPAREN statement  */
-#line 547 "parser.y"
+#line 406 "parser.y"
       {
           ASTNode *node = new_ast_node(AST_WHILE, "loop-while");
           node->left = (yyvsp[-2].expr).node;
@@ -2311,11 +2174,11 @@ yyreduce:
           check_condition_type((yyvsp[-2].expr).type, line_no, "loop");
           (yyval.node) = node;
       }
-#line 2315 "parser.tab.c"
+#line 2178 "parser.tab.c"
     break;
 
   case 55: /* loop_stmt: LOOP LPAREN opt_expr SEMICOLON opt_expr SEMICOLON opt_expr RPAREN statement  */
-#line 555 "parser.y"
+#line 414 "parser.y"
       {
           ASTNode *node = new_ast_node(AST_LOOP, "loop");
           node->left = (yyvsp[-6].expr).node;
@@ -2327,11 +2190,11 @@ yyreduce:
           }
           (yyval.node) = node;
       }
-#line 2331 "parser.tab.c"
+#line 2194 "parser.tab.c"
     break;
 
   case 56: /* loop_stmt: WHILE LPAREN expression RPAREN statement  */
-#line 567 "parser.y"
+#line 426 "parser.y"
       {
           ASTNode *node = new_ast_node(AST_WHILE, "while");
           node->left = (yyvsp[-2].expr).node;
@@ -2339,11 +2202,11 @@ yyreduce:
           check_condition_type((yyvsp[-2].expr).type, line_no, "while");
           (yyval.node) = node;
       }
-#line 2343 "parser.tab.c"
+#line 2206 "parser.tab.c"
     break;
 
   case 57: /* loop_stmt: DO statement WHILE LPAREN expression RPAREN SEMICOLON  */
-#line 575 "parser.y"
+#line 434 "parser.y"
       {
           ASTNode *node = new_ast_node(AST_DO_WHILE, "do-while");
           node->left = (yyvsp[-2].expr).node;
@@ -2351,11 +2214,11 @@ yyreduce:
           check_condition_type((yyvsp[-2].expr).type, line_no, "do-while");
           (yyval.node) = node;
       }
-#line 2355 "parser.tab.c"
+#line 2218 "parser.tab.c"
     break;
 
   case 58: /* loop_stmt: FOR LPAREN opt_expr SEMICOLON opt_expr SEMICOLON opt_expr RPAREN statement  */
-#line 583 "parser.y"
+#line 442 "parser.y"
       {
           ASTNode *node = new_ast_node(AST_FOR, "for");
           node->left = (yyvsp[-6].expr).node;
@@ -2367,183 +2230,183 @@ yyreduce:
           }
           (yyval.node) = node;
       }
-#line 2371 "parser.tab.c"
+#line 2234 "parser.tab.c"
     break;
 
   case 59: /* opt_expr: %empty  */
-#line 598 "parser.y"
+#line 457 "parser.y"
       {
           (yyval.expr) = make_expr(TYPE_UNKNOWN, NULL);
       }
-#line 2379 "parser.tab.c"
+#line 2242 "parser.tab.c"
     break;
 
   case 60: /* opt_expr: expression  */
-#line 602 "parser.y"
+#line 461 "parser.y"
       {
           (yyval.expr) = (yyvsp[0].expr);
       }
-#line 2387 "parser.tab.c"
+#line 2250 "parser.tab.c"
     break;
 
   case 61: /* jump_stmt: GIVE expression SEMICOLON  */
-#line 609 "parser.y"
+#line 468 "parser.y"
       {
           ASTNode *node = new_ast_node(AST_UNARYOP, "give");
           node->left = (yyvsp[-1].expr).node;
           (yyval.node) = node;
       }
-#line 2397 "parser.tab.c"
+#line 2260 "parser.tab.c"
     break;
 
   case 62: /* jump_stmt: RETURN expression SEMICOLON  */
-#line 615 "parser.y"
+#line 474 "parser.y"
       {
           ASTNode *node = new_ast_node(AST_UNARYOP, "return");
           node->left = (yyvsp[-1].expr).node;
           (yyval.node) = node;
       }
-#line 2407 "parser.tab.c"
+#line 2270 "parser.tab.c"
     break;
 
   case 63: /* jump_stmt: BREAK SEMICOLON  */
-#line 621 "parser.y"
+#line 480 "parser.y"
       {
           (yyval.node) = new_ast_node(AST_UNARYOP, "break");
       }
-#line 2415 "parser.tab.c"
+#line 2278 "parser.tab.c"
     break;
 
   case 64: /* jump_stmt: CONTINUE SEMICOLON  */
-#line 625 "parser.y"
+#line 484 "parser.y"
       {
           (yyval.node) = new_ast_node(AST_UNARYOP, "continue");
       }
-#line 2423 "parser.tab.c"
+#line 2286 "parser.tab.c"
     break;
 
   case 65: /* io_stmt: PRINT LPAREN print_arg_list_opt RPAREN SEMICOLON  */
-#line 632 "parser.y"
+#line 491 "parser.y"
       {
           ASTNode *node = new_ast_node(AST_PRINT, "print");
           node->left = (yyvsp[-2].node);
           (yyval.node) = node;
       }
-#line 2433 "parser.tab.c"
+#line 2296 "parser.tab.c"
     break;
 
   case 66: /* io_stmt: INPUT LPAREN IDENTIFIER RPAREN SEMICOLON  */
-#line 638 "parser.y"
+#line 497 "parser.y"
       {
           ASTNode *node = new_ast_node(AST_INPUT, (yyvsp[-2].str_val));
           (void)resolve_identifier_type((yyvsp[-2].str_val), line_no);
           (yyval.node) = node;
           free((yyvsp[-2].str_val));
       }
-#line 2444 "parser.tab.c"
+#line 2307 "parser.tab.c"
     break;
 
   case 67: /* print_arg_list_opt: %empty  */
-#line 648 "parser.y"
+#line 507 "parser.y"
       {
           (yyval.node) = NULL;
       }
-#line 2452 "parser.tab.c"
+#line 2315 "parser.tab.c"
     break;
 
   case 68: /* print_arg_list_opt: print_arg_list  */
-#line 652 "parser.y"
+#line 511 "parser.y"
       {
           (yyval.node) = (yyvsp[0].node);
       }
-#line 2460 "parser.tab.c"
+#line 2323 "parser.tab.c"
     break;
 
   case 69: /* print_arg_list: print_arg  */
-#line 659 "parser.y"
+#line 518 "parser.y"
       {
           (yyval.node) = (yyvsp[0].node);
       }
-#line 2468 "parser.tab.c"
+#line 2331 "parser.tab.c"
     break;
 
   case 70: /* print_arg_list: print_arg_list COMMA print_arg  */
-#line 663 "parser.y"
+#line 522 "parser.y"
       {
           (yyval.node) = append_node((yyvsp[-2].node), (yyvsp[0].node));
       }
-#line 2476 "parser.tab.c"
+#line 2339 "parser.tab.c"
     break;
 
   case 71: /* print_arg: expression  */
-#line 670 "parser.y"
+#line 529 "parser.y"
       {
           (yyval.node) = (yyvsp[0].expr).node;
       }
-#line 2484 "parser.tab.c"
+#line 2347 "parser.tab.c"
     break;
 
   case 72: /* function_call: IDENTIFIER LPAREN argument_list_opt RPAREN  */
-#line 677 "parser.y"
+#line 536 "parser.y"
       {
           ASTNode *call = new_ast_node(AST_FUNC_CALL, (yyvsp[-3].str_val));
           call->left = (yyvsp[-1].node);
           (yyval.node) = call;
           free((yyvsp[-3].str_val));
       }
-#line 2495 "parser.tab.c"
+#line 2358 "parser.tab.c"
     break;
 
   case 73: /* argument_list_opt: %empty  */
-#line 687 "parser.y"
+#line 546 "parser.y"
       {
           (yyval.node) = NULL;
       }
-#line 2503 "parser.tab.c"
+#line 2366 "parser.tab.c"
     break;
 
   case 74: /* argument_list_opt: argument_list  */
-#line 691 "parser.y"
+#line 550 "parser.y"
       {
           (yyval.node) = (yyvsp[0].node);
       }
-#line 2511 "parser.tab.c"
+#line 2374 "parser.tab.c"
     break;
 
   case 75: /* argument_list: expression  */
-#line 698 "parser.y"
+#line 557 "parser.y"
       {
           (yyval.node) = (yyvsp[0].expr).node;
       }
-#line 2519 "parser.tab.c"
+#line 2382 "parser.tab.c"
     break;
 
   case 76: /* argument_list: argument_list COMMA expression  */
-#line 702 "parser.y"
+#line 561 "parser.y"
       {
           (yyval.node) = append_node((yyvsp[-2].node), (yyvsp[0].expr).node);
       }
-#line 2527 "parser.tab.c"
+#line 2390 "parser.tab.c"
     break;
 
   case 77: /* expression: assignment_expr  */
-#line 709 "parser.y"
+#line 568 "parser.y"
       {
           (yyval.expr) = (yyvsp[0].expr);
       }
-#line 2535 "parser.tab.c"
+#line 2398 "parser.tab.c"
     break;
 
   case 78: /* assignment_expr: conditional_expr  */
-#line 716 "parser.y"
+#line 575 "parser.y"
       {
           (yyval.expr) = (yyvsp[0].expr);
       }
-#line 2543 "parser.tab.c"
+#line 2406 "parser.tab.c"
     break;
 
   case 79: /* assignment_expr: IDENTIFIER ASSIGN assignment_expr  */
-#line 720 "parser.y"
+#line 579 "parser.y"
       {
           NebulaType lhs = resolve_identifier_type((yyvsp[-2].str_val), line_no);
           NebulaType rhs = (yyvsp[0].expr).type;
@@ -2558,19 +2421,19 @@ yyreduce:
           (yyval.expr) = make_expr(lhs, as);
           free((yyvsp[-2].str_val));
       }
-#line 2562 "parser.tab.c"
+#line 2425 "parser.tab.c"
     break;
 
   case 80: /* conditional_expr: logical_or_expr  */
-#line 738 "parser.y"
+#line 597 "parser.y"
       {
           (yyval.expr) = (yyvsp[0].expr);
       }
-#line 2570 "parser.tab.c"
+#line 2433 "parser.tab.c"
     break;
 
   case 81: /* conditional_expr: logical_or_expr QMARK expression COLON conditional_expr  */
-#line 742 "parser.y"
+#line 601 "parser.y"
       {
           NebulaType out_type;
           ASTNode *node = new_ast_node(AST_IF, "?:");
@@ -2589,332 +2452,332 @@ yyreduce:
           node->inferred_type = out_type;
           (yyval.expr) = make_expr(out_type, node);
       }
-#line 2593 "parser.tab.c"
+#line 2456 "parser.tab.c"
     break;
 
   case 82: /* logical_or_expr: logical_and_expr  */
-#line 764 "parser.y"
+#line 623 "parser.y"
       {
           (yyval.expr) = (yyvsp[0].expr);
       }
-#line 2601 "parser.tab.c"
+#line 2464 "parser.tab.c"
     break;
 
   case 83: /* logical_or_expr: logical_or_expr OR logical_and_expr  */
-#line 768 "parser.y"
+#line 627 "parser.y"
       {
           NebulaType t = logical_result_type((yyvsp[-2].expr).type, (yyvsp[0].expr).type, "||", line_no);
           (yyval.expr) = make_expr(t, new_ast_binary(AST_BINOP, "||", (yyvsp[-2].expr).node, (yyvsp[0].expr).node, t));
       }
-#line 2610 "parser.tab.c"
+#line 2473 "parser.tab.c"
     break;
 
   case 84: /* logical_and_expr: bitwise_or_expr  */
-#line 776 "parser.y"
+#line 635 "parser.y"
       {
           (yyval.expr) = (yyvsp[0].expr);
       }
-#line 2618 "parser.tab.c"
+#line 2481 "parser.tab.c"
     break;
 
   case 85: /* logical_and_expr: logical_and_expr AND bitwise_or_expr  */
-#line 780 "parser.y"
+#line 639 "parser.y"
       {
           NebulaType t = logical_result_type((yyvsp[-2].expr).type, (yyvsp[0].expr).type, "&&", line_no);
           (yyval.expr) = make_expr(t, new_ast_binary(AST_BINOP, "&&", (yyvsp[-2].expr).node, (yyvsp[0].expr).node, t));
       }
-#line 2627 "parser.tab.c"
+#line 2490 "parser.tab.c"
     break;
 
   case 86: /* bitwise_or_expr: bitwise_xor_expr  */
-#line 788 "parser.y"
+#line 647 "parser.y"
       {
           (yyval.expr) = (yyvsp[0].expr);
       }
-#line 2635 "parser.tab.c"
+#line 2498 "parser.tab.c"
     break;
 
   case 87: /* bitwise_or_expr: bitwise_or_expr BIT_OR bitwise_xor_expr  */
-#line 792 "parser.y"
+#line 651 "parser.y"
       {
           NebulaType t = bitwise_result_type((yyvsp[-2].expr).type, (yyvsp[0].expr).type, "|", line_no);
           (yyval.expr) = make_expr(t, new_ast_binary(AST_BINOP, "|", (yyvsp[-2].expr).node, (yyvsp[0].expr).node, t));
       }
-#line 2644 "parser.tab.c"
+#line 2507 "parser.tab.c"
     break;
 
   case 88: /* bitwise_xor_expr: bitwise_and_expr  */
-#line 800 "parser.y"
+#line 659 "parser.y"
       {
           (yyval.expr) = (yyvsp[0].expr);
       }
-#line 2652 "parser.tab.c"
+#line 2515 "parser.tab.c"
     break;
 
   case 89: /* bitwise_xor_expr: bitwise_xor_expr BIT_XOR bitwise_and_expr  */
-#line 804 "parser.y"
+#line 663 "parser.y"
       {
           NebulaType t = bitwise_result_type((yyvsp[-2].expr).type, (yyvsp[0].expr).type, "^", line_no);
           (yyval.expr) = make_expr(t, new_ast_binary(AST_BINOP, "^", (yyvsp[-2].expr).node, (yyvsp[0].expr).node, t));
       }
-#line 2661 "parser.tab.c"
+#line 2524 "parser.tab.c"
     break;
 
   case 90: /* bitwise_and_expr: equality_expr  */
-#line 812 "parser.y"
+#line 671 "parser.y"
       {
           (yyval.expr) = (yyvsp[0].expr);
       }
-#line 2669 "parser.tab.c"
+#line 2532 "parser.tab.c"
     break;
 
   case 91: /* bitwise_and_expr: bitwise_and_expr BIT_AND equality_expr  */
-#line 816 "parser.y"
+#line 675 "parser.y"
       {
           NebulaType t = bitwise_result_type((yyvsp[-2].expr).type, (yyvsp[0].expr).type, "&", line_no);
           (yyval.expr) = make_expr(t, new_ast_binary(AST_BINOP, "&", (yyvsp[-2].expr).node, (yyvsp[0].expr).node, t));
       }
-#line 2678 "parser.tab.c"
+#line 2541 "parser.tab.c"
     break;
 
   case 92: /* equality_expr: relational_expr  */
-#line 824 "parser.y"
+#line 683 "parser.y"
       {
           (yyval.expr) = (yyvsp[0].expr);
       }
-#line 2686 "parser.tab.c"
+#line 2549 "parser.tab.c"
     break;
 
   case 93: /* equality_expr: equality_expr EQ relational_expr  */
-#line 828 "parser.y"
+#line 687 "parser.y"
       {
           NebulaType t = equality_result_type((yyvsp[-2].expr).type, (yyvsp[0].expr).type, "==", line_no);
           (yyval.expr) = make_expr(t, new_ast_binary(AST_BINOP, "==", (yyvsp[-2].expr).node, (yyvsp[0].expr).node, t));
       }
-#line 2695 "parser.tab.c"
+#line 2558 "parser.tab.c"
     break;
 
   case 94: /* equality_expr: equality_expr NEQ relational_expr  */
-#line 833 "parser.y"
+#line 692 "parser.y"
       {
           NebulaType t = equality_result_type((yyvsp[-2].expr).type, (yyvsp[0].expr).type, "!=", line_no);
           (yyval.expr) = make_expr(t, new_ast_binary(AST_BINOP, "!=", (yyvsp[-2].expr).node, (yyvsp[0].expr).node, t));
       }
-#line 2704 "parser.tab.c"
+#line 2567 "parser.tab.c"
     break;
 
   case 95: /* relational_expr: shift_expr  */
-#line 841 "parser.y"
+#line 700 "parser.y"
       {
           (yyval.expr) = (yyvsp[0].expr);
       }
-#line 2712 "parser.tab.c"
+#line 2575 "parser.tab.c"
     break;
 
   case 96: /* relational_expr: relational_expr LT shift_expr  */
-#line 845 "parser.y"
+#line 704 "parser.y"
       {
           NebulaType t = relational_result_type((yyvsp[-2].expr).type, (yyvsp[0].expr).type, "<", line_no);
           (yyval.expr) = make_expr(t, new_ast_binary(AST_BINOP, "<", (yyvsp[-2].expr).node, (yyvsp[0].expr).node, t));
       }
-#line 2721 "parser.tab.c"
+#line 2584 "parser.tab.c"
     break;
 
   case 97: /* relational_expr: relational_expr GT shift_expr  */
-#line 850 "parser.y"
+#line 709 "parser.y"
       {
           NebulaType t = relational_result_type((yyvsp[-2].expr).type, (yyvsp[0].expr).type, ">", line_no);
           (yyval.expr) = make_expr(t, new_ast_binary(AST_BINOP, ">", (yyvsp[-2].expr).node, (yyvsp[0].expr).node, t));
       }
-#line 2730 "parser.tab.c"
+#line 2593 "parser.tab.c"
     break;
 
   case 98: /* relational_expr: relational_expr LE shift_expr  */
-#line 855 "parser.y"
+#line 714 "parser.y"
       {
           NebulaType t = relational_result_type((yyvsp[-2].expr).type, (yyvsp[0].expr).type, "<=", line_no);
           (yyval.expr) = make_expr(t, new_ast_binary(AST_BINOP, "<=", (yyvsp[-2].expr).node, (yyvsp[0].expr).node, t));
       }
-#line 2739 "parser.tab.c"
+#line 2602 "parser.tab.c"
     break;
 
   case 99: /* relational_expr: relational_expr GE shift_expr  */
-#line 860 "parser.y"
+#line 719 "parser.y"
       {
           NebulaType t = relational_result_type((yyvsp[-2].expr).type, (yyvsp[0].expr).type, ">=", line_no);
           (yyval.expr) = make_expr(t, new_ast_binary(AST_BINOP, ">=", (yyvsp[-2].expr).node, (yyvsp[0].expr).node, t));
       }
-#line 2748 "parser.tab.c"
+#line 2611 "parser.tab.c"
     break;
 
   case 100: /* shift_expr: additive_expr  */
-#line 868 "parser.y"
+#line 727 "parser.y"
       {
           (yyval.expr) = (yyvsp[0].expr);
       }
-#line 2756 "parser.tab.c"
+#line 2619 "parser.tab.c"
     break;
 
   case 101: /* shift_expr: shift_expr LSHIFT additive_expr  */
-#line 872 "parser.y"
+#line 731 "parser.y"
       {
           NebulaType t = bitwise_result_type((yyvsp[-2].expr).type, (yyvsp[0].expr).type, "<<", line_no);
           (yyval.expr) = make_expr(t, new_ast_binary(AST_BINOP, "<<", (yyvsp[-2].expr).node, (yyvsp[0].expr).node, t));
       }
-#line 2765 "parser.tab.c"
+#line 2628 "parser.tab.c"
     break;
 
   case 102: /* shift_expr: shift_expr RSHIFT additive_expr  */
-#line 877 "parser.y"
+#line 736 "parser.y"
       {
           NebulaType t = bitwise_result_type((yyvsp[-2].expr).type, (yyvsp[0].expr).type, ">>", line_no);
           (yyval.expr) = make_expr(t, new_ast_binary(AST_BINOP, ">>", (yyvsp[-2].expr).node, (yyvsp[0].expr).node, t));
       }
-#line 2774 "parser.tab.c"
+#line 2637 "parser.tab.c"
     break;
 
   case 103: /* additive_expr: multiplicative_expr  */
-#line 885 "parser.y"
+#line 744 "parser.y"
       {
           (yyval.expr) = (yyvsp[0].expr);
       }
-#line 2782 "parser.tab.c"
+#line 2645 "parser.tab.c"
     break;
 
   case 104: /* additive_expr: additive_expr PLUS multiplicative_expr  */
-#line 889 "parser.y"
+#line 748 "parser.y"
       {
           NebulaType t = arithmetic_result_type((yyvsp[-2].expr).type, (yyvsp[0].expr).type, "+", line_no);
           (yyval.expr) = make_expr(t, new_ast_binary(AST_BINOP, "+", (yyvsp[-2].expr).node, (yyvsp[0].expr).node, t));
       }
-#line 2791 "parser.tab.c"
+#line 2654 "parser.tab.c"
     break;
 
   case 105: /* additive_expr: additive_expr MINUS multiplicative_expr  */
-#line 894 "parser.y"
+#line 753 "parser.y"
       {
           NebulaType t = arithmetic_result_type((yyvsp[-2].expr).type, (yyvsp[0].expr).type, "-", line_no);
           (yyval.expr) = make_expr(t, new_ast_binary(AST_BINOP, "-", (yyvsp[-2].expr).node, (yyvsp[0].expr).node, t));
       }
-#line 2800 "parser.tab.c"
+#line 2663 "parser.tab.c"
     break;
 
   case 106: /* multiplicative_expr: unary_expr  */
-#line 902 "parser.y"
+#line 761 "parser.y"
       {
           (yyval.expr) = (yyvsp[0].expr);
       }
-#line 2808 "parser.tab.c"
+#line 2671 "parser.tab.c"
     break;
 
   case 107: /* multiplicative_expr: multiplicative_expr MUL unary_expr  */
-#line 906 "parser.y"
+#line 765 "parser.y"
       {
           NebulaType t = arithmetic_result_type((yyvsp[-2].expr).type, (yyvsp[0].expr).type, "*", line_no);
           (yyval.expr) = make_expr(t, new_ast_binary(AST_BINOP, "*", (yyvsp[-2].expr).node, (yyvsp[0].expr).node, t));
       }
-#line 2817 "parser.tab.c"
+#line 2680 "parser.tab.c"
     break;
 
   case 108: /* multiplicative_expr: multiplicative_expr DIV unary_expr  */
-#line 911 "parser.y"
+#line 770 "parser.y"
       {
           NebulaType t = arithmetic_result_type((yyvsp[-2].expr).type, (yyvsp[0].expr).type, "/", line_no);
           (yyval.expr) = make_expr(t, new_ast_binary(AST_BINOP, "/", (yyvsp[-2].expr).node, (yyvsp[0].expr).node, t));
       }
-#line 2826 "parser.tab.c"
+#line 2689 "parser.tab.c"
     break;
 
   case 109: /* unary_expr: postfix_expr  */
-#line 919 "parser.y"
+#line 778 "parser.y"
       {
           (yyval.expr) = (yyvsp[0].expr);
       }
-#line 2834 "parser.tab.c"
+#line 2697 "parser.tab.c"
     break;
 
   case 110: /* unary_expr: PLUS unary_expr  */
-#line 923 "parser.y"
+#line 782 "parser.y"
       {
           NebulaType t = unary_plus_minus_type((yyvsp[0].expr).type, "+", line_no);
           (yyval.expr) = make_expr(t, new_ast_unary(AST_UNARYOP, "+", (yyvsp[0].expr).node, t));
       }
-#line 2843 "parser.tab.c"
+#line 2706 "parser.tab.c"
     break;
 
   case 111: /* unary_expr: MINUS unary_expr  */
-#line 928 "parser.y"
+#line 787 "parser.y"
       {
           NebulaType t = unary_plus_minus_type((yyvsp[0].expr).type, "-", line_no);
           (yyval.expr) = make_expr(t, new_ast_unary(AST_UNARYOP, "-", (yyvsp[0].expr).node, t));
       }
-#line 2852 "parser.tab.c"
+#line 2715 "parser.tab.c"
     break;
 
   case 112: /* unary_expr: NOT unary_expr  */
-#line 933 "parser.y"
+#line 792 "parser.y"
       {
           NebulaType t = unary_not_type((yyvsp[0].expr).type, line_no);
           (yyval.expr) = make_expr(t, new_ast_unary(AST_UNARYOP, "!", (yyvsp[0].expr).node, t));
       }
-#line 2861 "parser.tab.c"
+#line 2724 "parser.tab.c"
     break;
 
   case 113: /* unary_expr: BIT_NOT unary_expr  */
-#line 938 "parser.y"
+#line 797 "parser.y"
       {
           NebulaType t = unary_bitnot_type((yyvsp[0].expr).type, line_no);
           (yyval.expr) = make_expr(t, new_ast_unary(AST_UNARYOP, "~", (yyvsp[0].expr).node, t));
       }
-#line 2870 "parser.tab.c"
+#line 2733 "parser.tab.c"
     break;
 
   case 114: /* unary_expr: INC unary_expr  */
-#line 943 "parser.y"
+#line 802 "parser.y"
       {
           NebulaType t = incdec_type((yyvsp[0].expr).type, "++", line_no);
           (yyval.expr) = make_expr(t, new_ast_unary(AST_UNARYOP, "++", (yyvsp[0].expr).node, t));
       }
-#line 2879 "parser.tab.c"
+#line 2742 "parser.tab.c"
     break;
 
   case 115: /* unary_expr: DECREMENT unary_expr  */
-#line 948 "parser.y"
+#line 807 "parser.y"
       {
           NebulaType t = incdec_type((yyvsp[0].expr).type, "--", line_no);
           (yyval.expr) = make_expr(t, new_ast_unary(AST_UNARYOP, "--", (yyvsp[0].expr).node, t));
       }
-#line 2888 "parser.tab.c"
+#line 2751 "parser.tab.c"
     break;
 
   case 116: /* postfix_expr: primary_expr  */
-#line 956 "parser.y"
+#line 815 "parser.y"
       {
           (yyval.expr) = (yyvsp[0].expr);
       }
-#line 2896 "parser.tab.c"
+#line 2759 "parser.tab.c"
     break;
 
   case 117: /* postfix_expr: postfix_expr INC  */
-#line 960 "parser.y"
+#line 819 "parser.y"
       {
           NebulaType t = incdec_type((yyvsp[-1].expr).type, "++", line_no);
           (yyval.expr) = make_expr(t, new_ast_unary(AST_UNARYOP, "post++", (yyvsp[-1].expr).node, t));
       }
-#line 2905 "parser.tab.c"
+#line 2768 "parser.tab.c"
     break;
 
   case 118: /* postfix_expr: postfix_expr DECREMENT  */
-#line 965 "parser.y"
+#line 824 "parser.y"
       {
           NebulaType t = incdec_type((yyvsp[-1].expr).type, "--", line_no);
           (yyval.expr) = make_expr(t, new_ast_unary(AST_UNARYOP, "post--", (yyvsp[-1].expr).node, t));
       }
-#line 2914 "parser.tab.c"
+#line 2777 "parser.tab.c"
     break;
 
   case 119: /* postfix_expr: postfix_expr LBRACKET expression RBRACKET  */
-#line 970 "parser.y"
+#line 829 "parser.y"
       {
           ASTNode *idx = new_ast_binary(AST_BINOP, "[]", (yyvsp[-3].expr).node, (yyvsp[-1].expr).node, (yyvsp[-3].expr).type);
           if ((yyvsp[-1].expr).type != TYPE_NUM) {
@@ -2922,11 +2785,11 @@ yyreduce:
           }
           (yyval.expr) = make_expr((yyvsp[-3].expr).type, idx);
       }
-#line 2926 "parser.tab.c"
+#line 2789 "parser.tab.c"
     break;
 
   case 120: /* primary_expr: IDENTIFIER  */
-#line 981 "parser.y"
+#line 840 "parser.y"
       {
           NebulaType t = resolve_identifier_type((yyvsp[0].str_val), line_no);
           ASTNode *id = new_ast_node(AST_IDENTIFIER, (yyvsp[0].str_val));
@@ -2934,90 +2797,90 @@ yyreduce:
           (yyval.expr) = make_expr(t, id);
           free((yyvsp[0].str_val));
       }
-#line 2938 "parser.tab.c"
+#line 2801 "parser.tab.c"
     break;
 
   case 121: /* primary_expr: NUM_LITERAL  */
-#line 989 "parser.y"
+#line 848 "parser.y"
       {
           char buf[64];
           snprintf(buf, sizeof(buf), "%d", (yyvsp[0].num_val));
           (yyval.expr) = make_expr(TYPE_NUM, new_ast_node(AST_LITERAL, buf));
       }
-#line 2948 "parser.tab.c"
+#line 2811 "parser.tab.c"
     break;
 
   case 122: /* primary_expr: DEC_LITERAL  */
-#line 995 "parser.y"
+#line 854 "parser.y"
       {
           char buf[64];
           snprintf(buf, sizeof(buf), "%g", (yyvsp[0].dec_val));
           (yyval.expr) = make_expr(TYPE_DEC, new_ast_node(AST_LITERAL, buf));
       }
-#line 2958 "parser.tab.c"
+#line 2821 "parser.tab.c"
     break;
 
   case 123: /* primary_expr: CHAR_LITERAL  */
-#line 1001 "parser.y"
+#line 860 "parser.y"
       {
           char buf[8];
           snprintf(buf, sizeof(buf), "'%c'", (yyvsp[0].char_val));
           (yyval.expr) = make_expr(TYPE_CHAR, new_ast_node(AST_LITERAL, buf));
       }
-#line 2968 "parser.tab.c"
+#line 2831 "parser.tab.c"
     break;
 
   case 124: /* primary_expr: STRING_LITERAL  */
-#line 1007 "parser.y"
+#line 866 "parser.y"
       {
           (yyval.expr) = make_expr(TYPE_UNKNOWN, new_ast_node(AST_LITERAL, (yyvsp[0].str_val)));
           free((yyvsp[0].str_val));
       }
-#line 2977 "parser.tab.c"
+#line 2840 "parser.tab.c"
     break;
 
   case 125: /* primary_expr: TRUE  */
-#line 1012 "parser.y"
+#line 871 "parser.y"
       {
           (yyval.expr) = make_expr(TYPE_BOOL, new_ast_node(AST_LITERAL, "true"));
       }
-#line 2985 "parser.tab.c"
+#line 2848 "parser.tab.c"
     break;
 
   case 126: /* primary_expr: FALSE  */
-#line 1016 "parser.y"
+#line 875 "parser.y"
       {
           (yyval.expr) = make_expr(TYPE_BOOL, new_ast_node(AST_LITERAL, "false"));
       }
-#line 2993 "parser.tab.c"
+#line 2856 "parser.tab.c"
     break;
 
   case 127: /* primary_expr: function_call  */
-#line 1020 "parser.y"
+#line 879 "parser.y"
       {
           (yyval.expr) = make_expr(TYPE_UNKNOWN, (yyvsp[0].node));
       }
-#line 3001 "parser.tab.c"
+#line 2864 "parser.tab.c"
     break;
 
   case 128: /* primary_expr: INPUT LPAREN RPAREN  */
-#line 1024 "parser.y"
+#line 883 "parser.y"
       {
           (yyval.expr) = make_expr(TYPE_UNKNOWN, new_ast_node(AST_INPUT, "input"));
       }
-#line 3009 "parser.tab.c"
+#line 2872 "parser.tab.c"
     break;
 
   case 129: /* primary_expr: LPAREN expression RPAREN  */
-#line 1028 "parser.y"
+#line 887 "parser.y"
       {
           (yyval.expr) = (yyvsp[-1].expr);
       }
-#line 3017 "parser.tab.c"
+#line 2880 "parser.tab.c"
     break;
 
 
-#line 3021 "parser.tab.c"
+#line 2884 "parser.tab.c"
 
       default: break;
     }
@@ -3241,7 +3104,7 @@ yyreturnlab:
   return yyresult;
 }
 
-#line 1033 "parser.y"
+#line 892 "parser.y"
 
 
 void yyerror(const char *msg) {
@@ -3254,6 +3117,8 @@ void yyerror(const char *msg) {
 }
 
 int main(int argc, char **argv) {
+    semantic_reset();
+
     if (argc > 1) {
         yyin = fopen(argv[1], "r");
         if (!yyin) {
@@ -3272,1037 +3137,4 @@ int main(int argc, char **argv) {
 
     printf("Parse failure: Nebula source has syntax/semantic errors.\n");
     return 1;
-}
-
-static const char *type_name(NebulaType t) {
-    switch (t) {
-        case TYPE_NUM: return "num";
-        case TYPE_DEC: return "dec";
-        case TYPE_CHAR: return "char";
-        case TYPE_BOOL: return "bool";
-        case TYPE_VOID: return "void";
-        default: return "unknown";
-    }
-}
-
-static int is_numeric(NebulaType t) {
-    return t == TYPE_NUM || t == TYPE_DEC;
-}
-
-static int is_truthy_compatible(NebulaType t) {
-    return t == TYPE_BOOL || is_numeric(t);
-}
-
-static void semantic_error(int line, const char *fmt, ...) {
-    va_list args;
-    semantic_error_count++;
-    fprintf(stderr, "Semantic Error at line %d: ", line);
-    va_start(args, fmt);
-    vfprintf(stderr, fmt, args);
-    va_end(args);
-    fprintf(stderr, "\n");
-}
-
-static void enter_scope(void) {
-    current_scope++;
-}
-
-static void exit_scope(void) {
-    Symbol *curr = symbol_table;
-    Symbol *prev = NULL;
-    while (curr) {
-        if (curr->scope == current_scope) {
-            Symbol *to_delete = curr;
-            if (prev) {
-                prev->next = curr->next;
-            } else {
-                symbol_table = curr->next;
-            }
-            curr = curr->next;
-            free(to_delete->name);
-            free(to_delete);
-        } else {
-            prev = curr;
-            curr = curr->next;
-        }
-    }
-    if (current_scope > 0) {
-        current_scope--;
-    }
-}
-
-static Symbol *lookup_symbol_current_scope(const char *name) {
-    Symbol *curr = symbol_table;
-    while (curr) {
-        if (curr->scope == current_scope && strcmp(curr->name, name) == 0) {
-            return curr;
-        }
-        curr = curr->next;
-    }
-    return NULL;
-}
-
-static Symbol *lookup_symbol(const char *name) {
-    Symbol *curr = symbol_table;
-    Symbol *best = NULL;
-    while (curr) {
-        if (strcmp(curr->name, name) == 0) {
-            if (!best || curr->scope > best->scope) {
-                best = curr;
-            }
-        }
-        curr = curr->next;
-    }
-    return best;
-}
-
-static void declare_variable(const char *name, NebulaType type, int line) {
-    Symbol *exists = lookup_symbol_current_scope(name);
-    Symbol *sym;
-    if (exists) {
-        semantic_error(line, "Duplicate declaration of variable '%s'", name);
-        return;
-    }
-    sym = (Symbol *)malloc(sizeof(Symbol));
-    if (!sym) {
-        fprintf(stderr, "Fatal: out of memory while declaring symbol.\n");
-        exit(2);
-    }
-    sym->name = strdup(name);
-    sym->type = type;
-    sym->scope = current_scope;
-    sym->next = symbol_table;
-    symbol_table = sym;
-}
-
-static NebulaType resolve_identifier_type(const char *name, int line) {
-    Symbol *sym = lookup_symbol(name);
-    if (!sym) {
-        semantic_error(line, "Variable %s used before declaration", name);
-        return TYPE_UNKNOWN;
-    }
-    return sym->type;
-}
-
-static int is_assignment_compatible(NebulaType lhs, NebulaType rhs) {
-    if (lhs == TYPE_UNKNOWN || rhs == TYPE_UNKNOWN) {
-        return 1;
-    }
-    if (lhs == rhs) {
-        return 1;
-    }
-    if (lhs == TYPE_DEC && rhs == TYPE_NUM) {
-        return 1;
-    }
-    return 0;
-}
-
-static NebulaType arithmetic_result_type(NebulaType lhs, NebulaType rhs, const char *op, int line) {
-    if (lhs == TYPE_UNKNOWN || rhs == TYPE_UNKNOWN) {
-        return TYPE_UNKNOWN;
-    }
-    if (is_numeric(lhs) && is_numeric(rhs)) {
-        if (lhs == TYPE_DEC || rhs == TYPE_DEC) {
-            return TYPE_DEC;
-        }
-        return TYPE_NUM;
-    }
-    semantic_error(line, "Type mismatch (%s %s %s)", type_name(lhs), op, type_name(rhs));
-    return TYPE_UNKNOWN;
-}
-
-static NebulaType equality_result_type(NebulaType lhs, NebulaType rhs, const char *op, int line) {
-    if (lhs == TYPE_UNKNOWN || rhs == TYPE_UNKNOWN) {
-        return TYPE_BOOL;
-    }
-    if (lhs == rhs || (is_numeric(lhs) && is_numeric(rhs))) {
-        return TYPE_BOOL;
-    }
-    semantic_error(line, "Type mismatch (%s %s %s)", type_name(lhs), op, type_name(rhs));
-    return TYPE_BOOL;
-}
-
-static NebulaType relational_result_type(NebulaType lhs, NebulaType rhs, const char *op, int line) {
-    if (lhs == TYPE_UNKNOWN || rhs == TYPE_UNKNOWN) {
-        return TYPE_BOOL;
-    }
-    if (is_numeric(lhs) && is_numeric(rhs)) {
-        return TYPE_BOOL;
-    }
-    semantic_error(line, "Type mismatch (%s %s %s)", type_name(lhs), op, type_name(rhs));
-    return TYPE_BOOL;
-}
-
-static NebulaType logical_result_type(NebulaType lhs, NebulaType rhs, const char *op, int line) {
-    if (lhs == TYPE_UNKNOWN || rhs == TYPE_UNKNOWN) {
-        return TYPE_BOOL;
-    }
-    if (lhs == TYPE_BOOL && rhs == TYPE_BOOL) {
-        return TYPE_BOOL;
-    }
-    semantic_error(line, "Logical operator %s requires bool operands, found %s and %s", op, type_name(lhs), type_name(rhs));
-    return TYPE_BOOL;
-}
-
-static NebulaType bitwise_result_type(NebulaType lhs, NebulaType rhs, const char *op, int line) {
-    if (lhs == TYPE_UNKNOWN || rhs == TYPE_UNKNOWN) {
-        return TYPE_UNKNOWN;
-    }
-    if (lhs == TYPE_NUM && rhs == TYPE_NUM) {
-        return TYPE_NUM;
-    }
-    semantic_error(line, "Bitwise operator %s requires num operands, found %s and %s", op, type_name(lhs), type_name(rhs));
-    return TYPE_UNKNOWN;
-}
-
-static NebulaType unary_plus_minus_type(NebulaType t, const char *op, int line) {
-    if (t == TYPE_UNKNOWN) {
-        return TYPE_UNKNOWN;
-    }
-    if (is_numeric(t)) {
-        return t;
-    }
-    semantic_error(line, "Unary %s requires numeric operand, found %s", op, type_name(t));
-    return TYPE_UNKNOWN;
-}
-
-static NebulaType unary_not_type(NebulaType t, int line) {
-    if (t == TYPE_UNKNOWN) {
-        return TYPE_BOOL;
-    }
-    if (t == TYPE_BOOL) {
-        return TYPE_BOOL;
-    }
-    semantic_error(line, "Logical not requires bool operand, found %s", type_name(t));
-    return TYPE_BOOL;
-}
-
-static NebulaType unary_bitnot_type(NebulaType t, int line) {
-    if (t == TYPE_UNKNOWN) {
-        return TYPE_UNKNOWN;
-    }
-    if (t == TYPE_NUM) {
-        return TYPE_NUM;
-    }
-    semantic_error(line, "Bitwise not requires num operand, found %s", type_name(t));
-    return TYPE_UNKNOWN;
-}
-
-static NebulaType incdec_type(NebulaType t, const char *op, int line) {
-    if (t == TYPE_UNKNOWN) {
-        return TYPE_UNKNOWN;
-    }
-    if (is_numeric(t)) {
-        return t;
-    }
-    semantic_error(line, "%s requires numeric operand, found %s", op, type_name(t));
-    return TYPE_UNKNOWN;
-}
-
-static void check_condition_type(NebulaType cond_type, int line, const char *kw) {
-    if (cond_type == TYPE_UNKNOWN) {
-        return;
-    }
-    if (!is_truthy_compatible(cond_type)) {
-        semantic_error(line, "Condition in %s must be bool/num/dec, found %s", kw, type_name(cond_type));
-    }
-}
-
-static ExprAttr make_expr(NebulaType type, ASTNode *node) {
-    ExprAttr out;
-    out.type = type;
-    out.node = node;
-    if (node) {
-        node->inferred_type = type;
-    }
-    return out;
-}
-
-static ASTNode *new_ast_node(ASTNodeType kind, const char *text) {
-    ASTNode *node = (ASTNode *)calloc(1, sizeof(ASTNode));
-    if (!node) {
-        fprintf(stderr, "Fatal: out of memory while creating AST node.\n");
-        exit(2);
-    }
-    node->kind = kind;
-    node->inferred_type = TYPE_UNKNOWN;
-    if (text) {
-        node->text = strdup(text);
-    }
-    return node;
-}
-
-static ASTNode *new_ast_unary(ASTNodeType kind, const char *op, ASTNode *child, NebulaType t) {
-    ASTNode *node = new_ast_node(kind, op);
-    node->left = child;
-    node->inferred_type = t;
-    return node;
-}
-
-static ASTNode *new_ast_binary(ASTNodeType kind, const char *op, ASTNode *lhs, ASTNode *rhs, NebulaType t) {
-    ASTNode *node = new_ast_node(kind, op);
-    node->left = lhs;
-    node->right = rhs;
-    node->inferred_type = t;
-    return node;
-}
-
-static ASTNode *append_node(ASTNode *list, ASTNode *node) {
-    ASTNode *curr;
-    if (!list) {
-        return node;
-    }
-    curr = list;
-    while (curr->next) {
-        curr = curr->next;
-    }
-    curr->next = node;
-    return list;
-}
-
-static const char *ast_kind_name(ASTNodeType kind) {
-    switch (kind) {
-        case AST_PROGRAM: return "PROGRAM";
-        case AST_STMT_LIST: return "STMT_LIST";
-        case AST_DECL: return "DECL";
-        case AST_ASSIGN: return "ASSIGN";
-        case AST_EXPR_STMT: return "EXPR_STMT";
-        case AST_IF: return "IF";
-        case AST_LOOP: return "LOOP";
-        case AST_WHILE: return "WHILE";
-        case AST_DO_WHILE: return "DO_WHILE";
-        case AST_FOR: return "FOR";
-        case AST_PRINT: return "PRINT";
-        case AST_INPUT: return "INPUT";
-        case AST_BINOP: return "BINOP";
-        case AST_UNARYOP: return "UNARYOP";
-        case AST_LITERAL: return "LITERAL";
-        case AST_IDENTIFIER: return "IDENTIFIER";
-        case AST_FUNC_CALL: return "FUNC_CALL";
-        default: return "UNKNOWN";
-    }
-}
-
-static void print_ast(const ASTNode *node, int indent) {
-    const ASTNode *curr = node;
-    int i;
-    while (curr) {
-        for (i = 0; i < indent; i++) {
-            printf("  ");
-        }
-        printf("%s", ast_kind_name(curr->kind));
-        if (curr->text) {
-            printf("(%s)", curr->text);
-        }
-        if (curr->inferred_type != TYPE_UNKNOWN) {
-            printf(" : %s", type_name(curr->inferred_type));
-        }
-        printf("\n");
-
-        if (curr->left) {
-            print_ast(curr->left, indent + 1);
-        }
-        if (curr->right) {
-            print_ast(curr->right, indent + 1);
-        }
-        if (curr->third) {
-            print_ast(curr->third, indent + 1);
-        }
-        if (curr->body) {
-            print_ast(curr->body, indent + 1);
-        }
-
-        curr = curr->next;
-    }
-}
-
-static RuntimeValue make_default_value(NebulaType t) {
-    RuntimeValue v;
-    v.type = t;
-    v.num = 0;
-    v.dec = 0.0;
-    v.ch = '\0';
-    v.boolean = 0;
-    v.str = NULL;
-    return v;
-}
-
-static RuntimeValue runtime_copy_value(RuntimeValue v) {
-    RuntimeValue out = v;
-    if (v.str) {
-        out.str = strdup(v.str);
-    }
-    return out;
-}
-
-static RuntimeValue runtime_from_int(int n) {
-    RuntimeValue v = make_default_value(TYPE_NUM);
-    v.num = n;
-    v.dec = (double)n;
-    v.boolean = (n != 0);
-    return v;
-}
-
-static RuntimeValue runtime_from_double(double d) {
-    RuntimeValue v = make_default_value(TYPE_DEC);
-    v.dec = d;
-    v.num = (int)d;
-    v.boolean = (d != 0.0);
-    return v;
-}
-
-static RuntimeValue runtime_from_bool(int b) {
-    RuntimeValue v = make_default_value(TYPE_BOOL);
-    v.boolean = b ? 1 : 0;
-    v.num = v.boolean;
-    v.dec = (double)v.boolean;
-    return v;
-}
-
-static RuntimeValue runtime_cast_to(NebulaType t, RuntimeValue v) {
-    RuntimeValue out = make_default_value(t);
-    if (t == TYPE_NUM) {
-        if (v.type == TYPE_DEC) {
-            out.num = (int)v.dec;
-        } else if (v.type == TYPE_BOOL) {
-            out.num = v.boolean;
-        } else if (v.type == TYPE_CHAR) {
-            out.num = (unsigned char)v.ch;
-        } else {
-            out.num = v.num;
-        }
-        out.dec = (double)out.num;
-        out.boolean = (out.num != 0);
-        return out;
-    }
-    if (t == TYPE_DEC) {
-        if (v.type == TYPE_NUM) {
-            out.dec = (double)v.num;
-        } else if (v.type == TYPE_BOOL) {
-            out.dec = (double)v.boolean;
-        } else if (v.type == TYPE_CHAR) {
-            out.dec = (double)(unsigned char)v.ch;
-        } else {
-            out.dec = v.dec;
-        }
-        out.num = (int)out.dec;
-        out.boolean = (out.dec != 0.0);
-        return out;
-    }
-    if (t == TYPE_BOOL) {
-        out.boolean = runtime_is_truthy(v);
-        out.num = out.boolean;
-        out.dec = (double)out.boolean;
-        return out;
-    }
-    if (t == TYPE_CHAR) {
-        if (v.type == TYPE_NUM) {
-            out.ch = (char)v.num;
-        } else if (v.type == TYPE_DEC) {
-            out.ch = (char)((int)v.dec);
-        } else if (v.type == TYPE_BOOL) {
-            out.ch = (char)v.boolean;
-        } else {
-            out.ch = v.ch;
-        }
-        out.num = (unsigned char)out.ch;
-        out.dec = (double)out.num;
-        out.boolean = (out.ch != '\0');
-        return out;
-    }
-    return runtime_copy_value(v);
-}
-
-static RuntimeVar *runtime_lookup_var_current_scope(const char *name) {
-    RuntimeVar *curr = runtime_env;
-    while (curr) {
-        if (curr->scope == runtime_scope && strcmp(curr->name, name) == 0) {
-            return curr;
-        }
-        curr = curr->next;
-    }
-    return NULL;
-}
-
-static RuntimeVar *runtime_lookup_var(const char *name) {
-    RuntimeVar *curr = runtime_env;
-    RuntimeVar *best = NULL;
-    while (curr) {
-        if (strcmp(curr->name, name) == 0) {
-            if (!best || curr->scope > best->scope) {
-                best = curr;
-            }
-        }
-        curr = curr->next;
-    }
-    return best;
-}
-
-static void runtime_enter_scope(void) {
-    runtime_scope++;
-}
-
-static void runtime_exit_scope(void) {
-    RuntimeVar *curr = runtime_env;
-    RuntimeVar *prev = NULL;
-    while (curr) {
-        if (curr->scope == runtime_scope) {
-            RuntimeVar *dead = curr;
-            if (prev) {
-                prev->next = curr->next;
-            } else {
-                runtime_env = curr->next;
-            }
-            curr = curr->next;
-            if (dead->value.str) {
-                free(dead->value.str);
-            }
-            free(dead->name);
-            free(dead);
-        } else {
-            prev = curr;
-            curr = curr->next;
-        }
-    }
-    if (runtime_scope > 0) {
-        runtime_scope--;
-    }
-}
-
-static void runtime_declare_var(const char *name, RuntimeValue v) {
-    RuntimeVar *var = runtime_lookup_var_current_scope(name);
-    if (var) {
-        return;
-    }
-    var = (RuntimeVar *)calloc(1, sizeof(RuntimeVar));
-    if (!var) {
-        fprintf(stderr, "Runtime fatal: out of memory.\n");
-        exit(2);
-    }
-    var->name = strdup(name);
-    var->value = runtime_copy_value(v);
-    var->scope = runtime_scope;
-    var->next = runtime_env;
-    runtime_env = var;
-}
-
-static void runtime_set_var(const char *name, RuntimeValue v) {
-    RuntimeVar *var = runtime_lookup_var(name);
-    RuntimeValue casted;
-    if (!var) {
-        fprintf(stderr, "Runtime Error: assignment to undeclared variable '%s'\n", name);
-        return;
-    }
-    casted = runtime_cast_to(var->value.type, v);
-    if (var->value.str) {
-        free(var->value.str);
-    }
-    var->value = casted;
-}
-
-static RuntimeValue runtime_get_var(const char *name) {
-    RuntimeVar *var = runtime_lookup_var(name);
-    if (!var) {
-        fprintf(stderr, "Runtime Error: variable '%s' not found\n", name);
-        return make_default_value(TYPE_UNKNOWN);
-    }
-    return runtime_copy_value(var->value);
-}
-
-static int runtime_is_truthy(RuntimeValue v) {
-    if (v.type == TYPE_BOOL) {
-        return v.boolean != 0;
-    }
-    if (v.type == TYPE_NUM) {
-        return v.num != 0;
-    }
-    if (v.type == TYPE_DEC) {
-        return v.dec != 0.0;
-    }
-    if (v.type == TYPE_CHAR) {
-        return v.ch != '\0';
-    }
-    return 0;
-}
-
-static FunctionDef *runtime_find_function(const char *name) {
-    FunctionDef *f = function_table;
-    while (f) {
-        if (strcmp(f->name, name) == 0) {
-            return f;
-        }
-        f = f->next;
-    }
-    return NULL;
-}
-
-static void runtime_register_functions(ASTNode *root) {
-    ASTNode *curr;
-    function_table = NULL;
-    if (!root || root->kind != AST_PROGRAM) {
-        return;
-    }
-    curr = root->left;
-    while (curr) {
-        if (curr->kind == AST_FUNC_CALL && curr->body) {
-            FunctionDef *f = (FunctionDef *)calloc(1, sizeof(FunctionDef));
-            f->name = strdup(curr->text ? curr->text : "");
-            f->params = curr->left;
-            f->body = curr->body;
-            f->return_type = curr->inferred_type;
-            f->next = function_table;
-            function_table = f;
-        }
-        curr = curr->next;
-    }
-}
-
-static RuntimeValue runtime_call_function(const char *name, ASTNode *args) {
-    FunctionDef *f = runtime_find_function(name);
-    ASTNode *param;
-    ASTNode *arg;
-    ExecSignal sig;
-
-    if (!f) {
-        fprintf(stderr, "Runtime Error: undefined function '%s'\n", name);
-        return make_default_value(TYPE_UNKNOWN);
-    }
-
-    runtime_enter_scope();
-    param = f->params;
-    arg = args;
-    while (param) {
-        RuntimeValue av;
-        RuntimeValue dv;
-        if (!arg) {
-            fprintf(stderr, "Runtime Error: too few arguments for function '%s'\n", name);
-            break;
-        }
-        av = runtime_eval_expr(arg);
-        dv = make_default_value(param->inferred_type);
-        runtime_declare_var(param->text, dv);
-        runtime_set_var(param->text, av);
-        param = param->next;
-        arg = arg->next;
-    }
-    if (arg) {
-        fprintf(stderr, "Runtime Error: too many arguments for function '%s'\n", name);
-    }
-
-    sig = runtime_exec_node(f->body);
-    runtime_exit_scope();
-    if (sig.has_return) {
-        return runtime_cast_to(f->return_type, sig.return_value);
-    }
-    return make_default_value(f->return_type);
-}
-
-static RuntimeValue runtime_eval_expr(ASTNode *node) {
-    RuntimeValue l;
-    RuntimeValue r;
-    RuntimeValue out;
-    const char *op;
-    if (!node) {
-        return make_default_value(TYPE_UNKNOWN);
-    }
-
-    switch (node->kind) {
-        case AST_LITERAL:
-            if (!node->text) {
-                return make_default_value(TYPE_UNKNOWN);
-            }
-            if (strcmp(node->text, "true") == 0) {
-                return runtime_from_bool(1);
-            }
-            if (strcmp(node->text, "false") == 0) {
-                return runtime_from_bool(0);
-            }
-            if (node->text[0] == '\'' && strlen(node->text) >= 3) {
-                out = make_default_value(TYPE_CHAR);
-                out.ch = node->text[1];
-                out.num = (unsigned char)out.ch;
-                out.dec = (double)out.num;
-                out.boolean = (out.ch != '\0');
-                return out;
-            }
-            if (node->text[0] == '"') {
-                out = make_default_value(TYPE_UNKNOWN);
-                out.str = strdup(node->text);
-                return out;
-            }
-            if (strchr(node->text, '.') || strchr(node->text, 'e') || strchr(node->text, 'E')) {
-                return runtime_from_double(strtod(node->text, NULL));
-            }
-            return runtime_from_int((int)strtol(node->text, NULL, 10));
-
-        case AST_IDENTIFIER:
-            return runtime_get_var(node->text);
-
-        case AST_ASSIGN:
-            r = runtime_eval_expr(node->right);
-            runtime_set_var(node->left->text, r);
-            return runtime_get_var(node->left->text);
-
-        case AST_INPUT:
-            if (node->text && strcmp(node->text, "input") != 0) {
-                RuntimeVar *var = runtime_lookup_var(node->text);
-                if (!var) {
-                    fprintf(stderr, "Runtime Error: input target '%s' undeclared\n", node->text);
-                    return make_default_value(TYPE_UNKNOWN);
-                }
-                if (var->value.type == TYPE_DEC) {
-                    double d = 0.0;
-                    scanf("%lf", &d);
-                    runtime_set_var(node->text, runtime_from_double(d));
-                } else if (var->value.type == TYPE_CHAR) {
-                    char c = '\0';
-                    scanf(" %c", &c);
-                    out = make_default_value(TYPE_CHAR);
-                    out.ch = c;
-                    out.num = (unsigned char)c;
-                    out.dec = (double)out.num;
-                    out.boolean = (c != '\0');
-                    runtime_set_var(node->text, out);
-                } else if (var->value.type == TYPE_BOOL) {
-                    int b = 0;
-                    scanf("%d", &b);
-                    runtime_set_var(node->text, runtime_from_bool(b != 0));
-                } else {
-                    int n = 0;
-                    scanf("%d", &n);
-                    runtime_set_var(node->text, runtime_from_int(n));
-                }
-                return runtime_get_var(node->text);
-            }
-            {
-                int n = 0;
-                scanf("%d", &n);
-                return runtime_from_int(n);
-            }
-
-        case AST_FUNC_CALL:
-            if (node->body) {
-                return make_default_value(TYPE_UNKNOWN);
-            }
-            return runtime_call_function(node->text ? node->text : "", node->left);
-
-        case AST_UNARYOP:
-            op = node->text ? node->text : "";
-            if (strcmp(op, "+") == 0) {
-                return runtime_eval_expr(node->left);
-            }
-            if (strcmp(op, "-") == 0) {
-                l = runtime_eval_expr(node->left);
-                if (l.type == TYPE_DEC) return runtime_from_double(-l.dec);
-                return runtime_from_int(-l.num);
-            }
-            if (strcmp(op, "!") == 0) {
-                l = runtime_eval_expr(node->left);
-                return runtime_from_bool(!runtime_is_truthy(l));
-            }
-            if (strcmp(op, "~") == 0) {
-                l = runtime_eval_expr(node->left);
-                return runtime_from_int(~l.num);
-            }
-            if (strcmp(op, "++") == 0 || strcmp(op, "--") == 0 || strcmp(op, "post++") == 0 || strcmp(op, "post--") == 0) {
-                ASTNode *id = node->left;
-                RuntimeValue cur = runtime_eval_expr(id);
-                RuntimeValue old = cur;
-                int delta = (strstr(op, "--") != NULL) ? -1 : 1;
-                if (cur.type == TYPE_DEC) cur.dec += delta;
-                else cur.num += delta;
-                runtime_set_var(id->text, cur);
-                if (strncmp(op, "post", 4) == 0) {
-                    return old;
-                }
-                return runtime_get_var(id->text);
-            }
-            return make_default_value(TYPE_UNKNOWN);
-
-        case AST_BINOP:
-            op = node->text ? node->text : "";
-            if (strcmp(op, "[]") == 0) {
-                return runtime_eval_expr(node->left);
-            }
-            l = runtime_eval_expr(node->left);
-            r = runtime_eval_expr(node->right);
-            if (strcmp(op, "+") == 0) {
-                if (l.type == TYPE_DEC || r.type == TYPE_DEC) return runtime_from_double((l.type == TYPE_DEC ? l.dec : l.num) + (r.type == TYPE_DEC ? r.dec : r.num));
-                return runtime_from_int(l.num + r.num);
-            }
-            if (strcmp(op, "-") == 0) {
-                if (l.type == TYPE_DEC || r.type == TYPE_DEC) return runtime_from_double((l.type == TYPE_DEC ? l.dec : l.num) - (r.type == TYPE_DEC ? r.dec : r.num));
-                return runtime_from_int(l.num - r.num);
-            }
-            if (strcmp(op, "*") == 0) {
-                if (l.type == TYPE_DEC || r.type == TYPE_DEC) return runtime_from_double((l.type == TYPE_DEC ? l.dec : l.num) * (r.type == TYPE_DEC ? r.dec : r.num));
-                return runtime_from_int(l.num * r.num);
-            }
-            if (strcmp(op, "/") == 0) {
-                double rv = (r.type == TYPE_DEC ? r.dec : (double)r.num);
-                if (rv == 0.0) {
-                    fprintf(stderr, "Runtime Error: division by zero\n");
-                    return make_default_value(TYPE_UNKNOWN);
-                }
-                if (l.type == TYPE_DEC || r.type == TYPE_DEC) return runtime_from_double((l.type == TYPE_DEC ? l.dec : l.num) / rv);
-                return runtime_from_int(l.num / r.num);
-            }
-            if (strcmp(op, "<") == 0) return runtime_from_bool((l.type == TYPE_DEC ? l.dec : l.num) < (r.type == TYPE_DEC ? r.dec : r.num));
-            if (strcmp(op, ">") == 0) return runtime_from_bool((l.type == TYPE_DEC ? l.dec : l.num) > (r.type == TYPE_DEC ? r.dec : r.num));
-            if (strcmp(op, "<=") == 0) return runtime_from_bool((l.type == TYPE_DEC ? l.dec : l.num) <= (r.type == TYPE_DEC ? r.dec : r.num));
-            if (strcmp(op, ">=") == 0) return runtime_from_bool((l.type == TYPE_DEC ? l.dec : l.num) >= (r.type == TYPE_DEC ? r.dec : r.num));
-            if (strcmp(op, "==") == 0) return runtime_from_bool((l.type == TYPE_DEC ? l.dec : l.num) == (r.type == TYPE_DEC ? r.dec : r.num));
-            if (strcmp(op, "!=") == 0) return runtime_from_bool((l.type == TYPE_DEC ? l.dec : l.num) != (r.type == TYPE_DEC ? r.dec : r.num));
-            if (strcmp(op, "&&") == 0) return runtime_from_bool(runtime_is_truthy(l) && runtime_is_truthy(r));
-            if (strcmp(op, "||") == 0) return runtime_from_bool(runtime_is_truthy(l) || runtime_is_truthy(r));
-            if (strcmp(op, "&") == 0) return runtime_from_int(l.num & r.num);
-            if (strcmp(op, "|") == 0) return runtime_from_int(l.num | r.num);
-            if (strcmp(op, "^") == 0) return runtime_from_int(l.num ^ r.num);
-            if (strcmp(op, "<<") == 0) return runtime_from_int(l.num << r.num);
-            if (strcmp(op, ">>") == 0) return runtime_from_int(l.num >> r.num);
-            return make_default_value(TYPE_UNKNOWN);
-
-        case AST_IF:
-            if (node->text && strcmp(node->text, "?:") == 0) {
-                return runtime_is_truthy(runtime_eval_expr(node->left)) ? runtime_eval_expr(node->right) : runtime_eval_expr(node->third);
-            }
-            return make_default_value(TYPE_UNKNOWN);
-
-        default:
-            return make_default_value(TYPE_UNKNOWN);
-    }
-}
-
-static ExecSignal runtime_exec_list(ASTNode *node) {
-    ExecSignal sig;
-    ASTNode *curr = node;
-    sig.has_return = 0;
-    sig.has_break = 0;
-    sig.has_continue = 0;
-    sig.return_value = make_default_value(TYPE_VOID);
-    while (curr) {
-        sig = runtime_exec_node(curr);
-        if (sig.has_return || sig.has_break || sig.has_continue) {
-            return sig;
-        }
-        curr = curr->next;
-    }
-    return sig;
-}
-
-static ExecSignal runtime_exec_node(ASTNode *node) {
-    ExecSignal sig;
-    sig.has_return = 0;
-    sig.has_break = 0;
-    sig.has_continue = 0;
-    sig.return_value = make_default_value(TYPE_VOID);
-
-    if (!node) {
-        return sig;
-    }
-
-    switch (node->kind) {
-        case AST_PROGRAM:
-            return runtime_exec_list(node->left);
-
-        case AST_STMT_LIST:
-            runtime_enter_scope();
-            sig = runtime_exec_list(node->left);
-            runtime_exit_scope();
-            return sig;
-
-        case AST_DECL: {
-            RuntimeValue v = make_default_value(node->inferred_type);
-            runtime_declare_var(node->text, v);
-            if (node->left) {
-                RuntimeValue init = runtime_eval_expr(node->left);
-                runtime_set_var(node->text, init);
-            }
-            return sig;
-        }
-
-        case AST_EXPR_STMT:
-            (void)runtime_eval_expr(node->left);
-            return sig;
-
-        case AST_INPUT:
-            (void)runtime_eval_expr(node);
-            return sig;
-
-        case AST_PRINT: {
-            ASTNode *arg = node->left;
-            int first = 1;
-            while (arg) {
-                RuntimeValue v = runtime_eval_expr(arg);
-                if (!first) {
-                    printf(" ");
-                }
-                if (v.str) {
-                    size_t len = strlen(v.str);
-                    if (len >= 2 && v.str[0] == '"' && v.str[len - 1] == '"') {
-                        printf("%.*s", (int)(len - 2), v.str + 1);
-                    } else {
-                        printf("%s", v.str);
-                    }
-                } else if (v.type == TYPE_DEC) {
-                    printf("%g", v.dec);
-                } else if (v.type == TYPE_CHAR) {
-                    printf("%c", v.ch);
-                } else if (v.type == TYPE_BOOL) {
-                    printf("%s", v.boolean ? "true" : "false");
-                } else {
-                    printf("%d", v.num);
-                }
-                first = 0;
-                arg = arg->next;
-            }
-            printf("\n");
-            return sig;
-        }
-
-        case AST_IF:
-            if (node->text && strcmp(node->text, "switch") == 0) {
-                RuntimeValue target = runtime_eval_expr(node->left);
-                ASTNode *c = node->right;
-                int matched = 0;
-                while (c) {
-                    if (c->kind == AST_IF && c->text && strcmp(c->text, "case") == 0) {
-                        RuntimeValue cv = runtime_eval_expr(c->left);
-                        int eq = (target.type == TYPE_DEC || cv.type == TYPE_DEC)
-                            ? ((target.type == TYPE_DEC ? target.dec : target.num) == (cv.type == TYPE_DEC ? cv.dec : cv.num))
-                            : (target.num == cv.num);
-                        if (eq) {
-                            matched = 1;
-                            sig = runtime_exec_list(c->right);
-                            if (sig.has_return || sig.has_break || sig.has_continue) return sig;
-                            break;
-                        }
-                    }
-                    c = c->next;
-                }
-                if (!matched && node->third) {
-                    sig = runtime_exec_list(node->third->right);
-                }
-                return sig;
-            }
-            if (runtime_is_truthy(runtime_eval_expr(node->left))) {
-                return runtime_exec_node(node->right);
-            }
-            if (node->third) {
-                return runtime_exec_node(node->third);
-            }
-            return sig;
-
-        case AST_LOOP:
-            if (node->left) (void)runtime_eval_expr(node->left);
-            while (1) {
-                if (node->right && !runtime_is_truthy(runtime_eval_expr(node->right))) {
-                    break;
-                }
-                sig = runtime_exec_node(node->body);
-                if (sig.has_return) return sig;
-                if (sig.has_break) {
-                    sig.has_break = 0;
-                    break;
-                }
-                if (node->third) (void)runtime_eval_expr(node->third);
-                if (sig.has_continue) {
-                    sig.has_continue = 0;
-                }
-            }
-            return sig;
-
-        case AST_WHILE:
-            while (runtime_is_truthy(runtime_eval_expr(node->left))) {
-                sig = runtime_exec_node(node->body);
-                if (sig.has_return) return sig;
-                if (sig.has_break) {
-                    sig.has_break = 0;
-                    break;
-                }
-                if (sig.has_continue) {
-                    sig.has_continue = 0;
-                }
-            }
-            return sig;
-
-        case AST_DO_WHILE:
-            do {
-                sig = runtime_exec_node(node->body);
-                if (sig.has_return) return sig;
-                if (sig.has_break) {
-                    sig.has_break = 0;
-                    break;
-                }
-                if (sig.has_continue) {
-                    sig.has_continue = 0;
-                }
-            } while (runtime_is_truthy(runtime_eval_expr(node->left)));
-            return sig;
-
-        case AST_FOR:
-            if (node->left) (void)runtime_eval_expr(node->left);
-            while (1) {
-                if (node->right && !runtime_is_truthy(runtime_eval_expr(node->right))) {
-                    break;
-                }
-                sig = runtime_exec_node(node->body);
-                if (sig.has_return) return sig;
-                if (sig.has_break) {
-                    sig.has_break = 0;
-                    break;
-                }
-                if (node->third) (void)runtime_eval_expr(node->third);
-                if (sig.has_continue) {
-                    sig.has_continue = 0;
-                }
-            }
-            return sig;
-
-        case AST_UNARYOP:
-            if (node->text && (strcmp(node->text, "give") == 0 || strcmp(node->text, "return") == 0)) {
-                sig.has_return = 1;
-                sig.return_value = runtime_eval_expr(node->left);
-                return sig;
-            }
-            if (node->text && strcmp(node->text, "break") == 0) {
-                sig.has_break = 1;
-                return sig;
-            }
-            if (node->text && strcmp(node->text, "continue") == 0) {
-                sig.has_continue = 1;
-                return sig;
-            }
-            (void)runtime_eval_expr(node);
-            return sig;
-
-        case AST_FUNC_CALL:
-            if (node->body) {
-                return sig;
-            }
-            (void)runtime_eval_expr(node);
-            return sig;
-
-        default:
-            (void)runtime_eval_expr(node);
-            return sig;
-    }
-}
-
-static void execute_program(ASTNode *root) {
-    ASTNode *curr;
-    runtime_register_functions(root);
-    runtime_scope = 0;
-    runtime_env = NULL;
-
-    curr = root ? root->left : NULL;
-    while (curr) {
-        if (!(curr->kind == AST_FUNC_CALL && curr->body)) {
-            ExecSignal sig = runtime_exec_node(curr);
-            if (sig.has_return) {
-                break;
-            }
-        }
-        curr = curr->next;
-    }
 }

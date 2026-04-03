@@ -45,15 +45,11 @@
 extern int yydebug;
 #endif
 /* "%code requires" blocks.  */
-#line 158 "parser.y"
+#line 21 "parser.y"
 
-    typedef struct ASTNode ASTNode;
-    typedef struct ExprAttr {
-        int type;
-        ASTNode *node;
-    } ExprAttr;
+    #include "ast.h"
 
-#line 57 "parser.tab.h"
+#line 53 "parser.tab.h"
 
 /* Token kinds.  */
 #ifndef YYTOKENTYPE
@@ -145,7 +141,7 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 168 "parser.y"
+#line 27 "parser.y"
 
     int num_val;
     double dec_val;
@@ -155,7 +151,7 @@ union YYSTYPE
     ASTNode *node;
     ExprAttr expr;
 
-#line 159 "parser.tab.h"
+#line 155 "parser.tab.h"
 
 };
 typedef union YYSTYPE YYSTYPE;
