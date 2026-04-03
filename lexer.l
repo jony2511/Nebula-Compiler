@@ -12,6 +12,16 @@
 int line_no = 1;
 int nebula_lex_error = 0;
 
+static void bump_line_count(const char *text) {
+    const char *p = text;
+    while (*p) {
+        if (*p == '\n') {
+            line_no++;
+        }
+        p++;
+    }
+}
+
 static void lex_error(const char *text) {
     nebula_lex_error = 1;
     fprintf(stderr, "Lexical Error at line %d: invalid token '%s'\n", line_no, text);
@@ -135,7 +145,10 @@ WS              [ \t\r]+
                     }
 
 "//"[^\n]*         { /* Skip single-line comment. */ }
-"/*"([^*]|\*+[^*/])*\*+"/"  { /* Skip multi-line comment. */ }
+"/*"([^*]|\*+[^*/])*\*+"/"  {
+                        bump_line_count(yytext);
+                        /* Skip multi-line comment. */
+                    }
 
 {WS}                { /* Ignore spaces/tabs. */ }
 \n                  { line_no++; }

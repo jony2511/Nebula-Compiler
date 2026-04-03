@@ -1,0 +1,9 @@
+num x = 10;
+dec y = 2.5;
+num z;
+
+z = x + 3;
+
+when (z > 5) {
+    print("ok", z, y);
+}
