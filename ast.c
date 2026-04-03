@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 typedef struct {
     NebulaType type;
@@ -59,6 +60,9 @@ static ExecSignal runtime_exec_list(ASTNode *node);
 static void runtime_register_functions(ASTNode *root);
 static FunctionDef *runtime_find_function(const char *name);
 static RuntimeValue runtime_call_function(const char *name, ASTNode *args);
+static int runtime_try_call_builtin(const char *name, ASTNode *args, RuntimeValue *out);
+static int runtime_value_to_int(RuntimeValue v);
+static double runtime_value_to_double(RuntimeValue v);
 static const char *type_name(NebulaType t);
 static const char *ast_kind_name(ASTNodeType kind);
 
@@ -391,6 +395,13 @@ static RuntimeValue runtime_call_function(const char *name, ASTNode *args) {
     ExecSignal sig;
 
     if (!f) {
+        RuntimeValue out;
+        if (runtime_try_call_builtin(name, args, &out)) {
+            return out;
+        }
+    }
+
+    if (!f) {
         fprintf(stderr, "Runtime Error: undefined function '%s'\n", name);
         return make_default_value(TYPE_UNKNOWN);
     }
@@ -422,6 +433,198 @@ static RuntimeValue runtime_call_function(const char *name, ASTNode *args) {
         return runtime_cast_to(f->return_type, sig.return_value);
     }
     return make_default_value(f->return_type);
+}
+
+static int runtime_value_to_int(RuntimeValue v) {
+    if (v.type == TYPE_DEC) return (int)v.dec;
+    if (v.type == TYPE_BOOL) return v.boolean;
+    if (v.type == TYPE_CHAR) return (unsigned char)v.ch;
+    return v.num;
+}
+
+static double runtime_value_to_double(RuntimeValue v) {
+    if (v.type == TYPE_DEC) return v.dec;
+    if (v.type == TYPE_BOOL) return (double)v.boolean;
+    if (v.type == TYPE_CHAR) return (double)(unsigned char)v.ch;
+    return (double)v.num;
+}
+
+static int runtime_try_call_builtin(const char *name, ASTNode *args, RuntimeValue *out) {
+    RuntimeValue vals[4];
+    int argc = 0;
+    ASTNode *curr = args;
+    int i;
+
+    while (curr && argc < 4) {
+        vals[argc++] = runtime_eval_expr(curr);
+        curr = curr->next;
+    }
+    if (curr) {
+        fprintf(stderr, "Runtime Error: too many arguments for built-in '%s'\n", name);
+        *out = make_default_value(TYPE_UNKNOWN);
+        return 1;
+    }
+
+    if (strcmp(name, "even") == 0 || strcmp(name, "Even") == 0) {
+        if (argc != 1) {
+            fprintf(stderr, "Runtime Error: even(x) expects 1 argument\n");
+            *out = make_default_value(TYPE_UNKNOWN);
+            return 1;
+        }
+        *out = runtime_from_bool((runtime_value_to_int(vals[0]) % 2) == 0);
+        return 1;
+    }
+
+    if (strcmp(name, "odd") == 0 || strcmp(name, "Odd") == 0) {
+        if (argc != 1) {
+            fprintf(stderr, "Runtime Error: odd(x) expects 1 argument\n");
+            *out = make_default_value(TYPE_UNKNOWN);
+            return 1;
+        }
+        *out = runtime_from_bool((runtime_value_to_int(vals[0]) % 2) != 0);
+        return 1;
+    }
+
+    if (strcmp(name, "factorial") == 0 || strcmp(name, "Factorial") == 0) {
+        int n;
+        int fact;
+        if (argc != 1) {
+            fprintf(stderr, "Runtime Error: factorial(n) expects 1 argument\n");
+            *out = make_default_value(TYPE_UNKNOWN);
+            return 1;
+        }
+        n = runtime_value_to_int(vals[0]);
+        if (n < 0) {
+            fprintf(stderr, "Runtime Error: factorial undefined for negative numbers\n");
+            *out = make_default_value(TYPE_UNKNOWN);
+            return 1;
+        }
+        fact = 1;
+        for (i = 2; i <= n; i++) {
+            fact *= i;
+        }
+        *out = runtime_from_int(fact);
+        return 1;
+    }
+
+    if (strcmp(name, "prime") == 0 || strcmp(name, "Prime") == 0) {
+        int n;
+        int is_prime = 1;
+        if (argc != 1) {
+            fprintf(stderr, "Runtime Error: prime(n) expects 1 argument\n");
+            *out = make_default_value(TYPE_UNKNOWN);
+            return 1;
+        }
+        n = runtime_value_to_int(vals[0]);
+        if (n < 2) {
+            *out = runtime_from_bool(0);
+            return 1;
+        }
+        for (i = 2; i * i <= n; i++) {
+            if (n % i == 0) {
+                is_prime = 0;
+                break;
+            }
+        }
+        *out = runtime_from_bool(is_prime);
+        return 1;
+    }
+
+    if (strcmp(name, "palindrome") == 0 || strcmp(name, "Palindrome") == 0) {
+        int n;
+        int x;
+        int rev = 0;
+        if (argc != 1) {
+            fprintf(stderr, "Runtime Error: palindrome(x) expects 1 argument\n");
+            *out = make_default_value(TYPE_UNKNOWN);
+            return 1;
+        }
+        if (vals[0].str) {
+            const char *s = vals[0].str;
+            int left;
+            int right;
+            int ok = 1;
+            int len = (int)strlen(s);
+            if (len >= 2 && s[0] == '"' && s[len - 1] == '"') {
+                s = s + 1;
+                len -= 2;
+            }
+            left = 0;
+            right = len - 1;
+            while (left < right) {
+                if (s[left] != s[right]) {
+                    ok = 0;
+                    break;
+                }
+                left++;
+                right--;
+            }
+            *out = runtime_from_bool(ok);
+            return 1;
+        }
+        n = runtime_value_to_int(vals[0]);
+        if (n < 0) {
+            *out = runtime_from_bool(0);
+            return 1;
+        }
+        x = n;
+        while (x > 0) {
+            rev = rev * 10 + (x % 10);
+            x /= 10;
+        }
+        *out = runtime_from_bool(n == rev);
+        return 1;
+    }
+
+    if (strcmp(name, "leap_year") == 0 || strcmp(name, "leapyear") == 0 || strcmp(name, "LeapYear") == 0) {
+        int y;
+        int leap;
+        if (argc != 1) {
+            fprintf(stderr, "Runtime Error: leap_year(y) expects 1 argument\n");
+            *out = make_default_value(TYPE_UNKNOWN);
+            return 1;
+        }
+        y = runtime_value_to_int(vals[0]);
+        leap = ((y % 4 == 0 && y % 100 != 0) || (y % 400 == 0));
+        *out = runtime_from_bool(leap);
+        return 1;
+    }
+
+    if (strcmp(name, "power") == 0 || strcmp(name, "Power") == 0) {
+        double base;
+        double expv;
+        if (argc != 2) {
+            fprintf(stderr, "Runtime Error: power(base, exp) expects 2 arguments\n");
+            *out = make_default_value(TYPE_UNKNOWN);
+            return 1;
+        }
+        base = runtime_value_to_double(vals[0]);
+        expv = runtime_value_to_double(vals[1]);
+        *out = runtime_from_double(pow(base, expv));
+        return 1;
+    }
+
+    if (strcmp(name, "sin") == 0 || strcmp(name, "cos") == 0 || strcmp(name, "tan") == 0) {
+        double x;
+        double rad;
+        if (argc != 1) {
+            fprintf(stderr, "Runtime Error: %s(x) expects 1 argument\n", name);
+            *out = make_default_value(TYPE_UNKNOWN);
+            return 1;
+        }
+        x = runtime_value_to_double(vals[0]);
+        rad = x * 3.14159265358979323846 / 180.0;
+        if (strcmp(name, "sin") == 0) {
+            *out = runtime_from_double(sin(rad));
+        } else if (strcmp(name, "cos") == 0) {
+            *out = runtime_from_double(cos(rad));
+        } else {
+            *out = runtime_from_double(tan(rad));
+        }
+        return 1;
+    }
+
+    return 0;
 }
 
 static RuntimeValue runtime_eval_expr(ASTNode *node) {

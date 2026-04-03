@@ -1,0 +1,6 @@
+num a = 10;
+a = a + 5;
+display(a);
+a = a * 2;
+
+display(a);

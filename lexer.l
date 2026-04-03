@@ -63,6 +63,7 @@ WS              [ \t\r]+
 "do"                { return DO; }
 "for"               { return FOR; }
 "break"             { return BREAK; }
+"stop"              { return BREAK; }
 "continue"          { return CONTINUE; }
 "return"            { return RETURN; }
 "function"          { return FUNCTION; }

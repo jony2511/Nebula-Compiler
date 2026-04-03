@@ -1,0 +1,28 @@
+display("even(10):");
+display(even(10));
+
+display("odd(10):");
+display(odd(10));
+
+display("factorial(5):");
+display(factorial(5));
+
+display("prime(25):");
+display(prime(25));
+
+display("palindrome(abbd):");
+display(palindrome("abbd"));
+
+display("leap_year(2024):");
+display(leap_year(2024));
+
+display("power(2, 8):");
+display(power(2, 8));
+
+dec angle = 30;
+display("sin(30):");
+display(sin(angle));
+display("cos(30):");
+display(cos(angle));
+display("tan(30):");
+display(tan(angle));

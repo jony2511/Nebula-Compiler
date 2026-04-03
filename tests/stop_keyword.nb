@@ -1,0 +1,8 @@
+num i = 0;
+loop (true) {
+    display(i);
+    when (i == 2) {
+        stop;
+    }
+    i = i + 1;
+}
