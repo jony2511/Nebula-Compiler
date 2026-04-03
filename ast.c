@@ -5,6 +5,8 @@
 #include <string.h>
 #include <math.h>
 
+#define MAX_HISTORY 10
+
 typedef struct {
     NebulaType type;
     int num;
@@ -29,6 +31,14 @@ typedef struct FunctionDef {
     struct FunctionDef *next;
 } FunctionDef;
 
+typedef struct History {
+    char *name;
+    int values[MAX_HISTORY];
+    int head;
+    int count;
+    struct History *next;
+} History;
+
 typedef struct {
     int has_return;
     int has_break;
@@ -38,6 +48,7 @@ typedef struct {
 
 static RuntimeVar *runtime_env = NULL;
 static FunctionDef *function_table = NULL;
+static History *history_table = NULL;
 static int runtime_scope = 0;
 
 static RuntimeValue make_default_value(NebulaType t);
@@ -63,6 +74,9 @@ static RuntimeValue runtime_call_function(const char *name, ASTNode *args);
 static int runtime_try_call_builtin(const char *name, ASTNode *args, RuntimeValue *out);
 static int runtime_value_to_int(RuntimeValue v);
 static double runtime_value_to_double(RuntimeValue v);
+static History *get_history(const char *name);
+static void add_value(History *history, int value);
+static int nebula_observe(History *history, int steps_back, int *ok);
 static const char *type_name(NebulaType t);
 static const char *ast_kind_name(ASTNodeType kind);
 
@@ -334,6 +348,7 @@ static void runtime_declare_var(const char *name, RuntimeValue v) {
 static void runtime_set_var(const char *name, RuntimeValue v) {
     RuntimeVar *var = runtime_lookup_var(name);
     RuntimeValue casted;
+    History *h;
     if (!var) {
         fprintf(stderr, "Runtime Error: assignment to undeclared variable '%s'\n", name);
         return;
@@ -341,6 +356,12 @@ static void runtime_set_var(const char *name, RuntimeValue v) {
     casted = runtime_cast_to(var->value.type, v);
     if (var->value.str) free(var->value.str);
     var->value = casted;
+
+    /* Track assignment history for nebula(variable, steps_back), num only. */
+    if (var->value.type == TYPE_NUM) {
+        h = get_history(name);
+        add_value(h, var->value.num);
+    }
 }
 
 static RuntimeValue runtime_get_var(const char *name) {
@@ -454,6 +475,49 @@ static int runtime_try_call_builtin(const char *name, ASTNode *args, RuntimeValu
     int argc = 0;
     ASTNode *curr = args;
     int i;
+
+    if (strcmp(name, "nebula") == 0 || strcmp(name, "Nebula") == 0) {
+        ASTNode *id_node;
+        ASTNode *step_node;
+        RuntimeValue step_val;
+        int k;
+        History *h;
+        int ok = 0;
+        int observed = 0;
+
+        if (!args || !args->next || args->next->next) {
+            fprintf(stderr, "Runtime Error: nebula(variable, steps_back) expects exactly 2 arguments\n");
+            *out = runtime_from_int(0);
+            return 1;
+        }
+
+        id_node = args;
+        step_node = args->next;
+        if (id_node->kind != AST_IDENTIFIER || !id_node->text) {
+            fprintf(stderr, "Runtime Error: nebula first argument must be a variable identifier\n");
+            *out = runtime_from_int(0);
+            return 1;
+        }
+
+        step_val = runtime_eval_expr(step_node);
+        k = runtime_value_to_int(step_val);
+        if (k < 0) {
+            fprintf(stderr, "Runtime Error: nebula steps_back must be >= 0\n");
+            *out = runtime_from_int(0);
+            return 1;
+        }
+
+        h = get_history(id_node->text);
+        observed = nebula_observe(h, k, &ok);
+        if (!ok) {
+            fprintf(stderr, "Runtime Warning: nebula(%s, %d) out of history range (available: %d)\n", id_node->text, k, h ? h->count-1 : 0);
+            *out = runtime_from_int(0);
+            return 1;
+        }
+
+        *out = runtime_from_int(observed);
+        return 1;
+    }
 
     while (curr && argc < 4) {
         vals[argc++] = runtime_eval_expr(curr);
@@ -989,6 +1053,7 @@ void execute_program(ASTNode *root) {
     runtime_register_functions(root);
     runtime_scope = 0;
     runtime_env = NULL;
+    history_table = NULL;
 
     curr = root ? root->left : NULL;
     while (curr) {
@@ -1000,4 +1065,52 @@ void execute_program(ASTNode *root) {
         }
         curr = curr->next;
     }
+}
+
+static History *get_history(const char *name) {
+    History *curr = history_table;
+    while (curr) {
+        if (strcmp(curr->name, name) == 0) {
+            return curr;
+        }
+        curr = curr->next;
+    }
+
+    curr = (History *)calloc(1, sizeof(History));
+    if (!curr) {
+        fprintf(stderr, "Runtime fatal: out of memory while creating history.\n");
+        exit(2);
+    }
+    curr->name = strdup(name);
+    curr->head = -1;
+    curr->count = 0;
+    curr->next = history_table;
+    history_table = curr;
+    return curr;
+}
+
+static void add_value(History *history, int value) {
+    if (!history) {
+        return;
+    }
+    history->head = (history->head + 1) % MAX_HISTORY;
+    history->values[history->head] = value;
+    if (history->count < MAX_HISTORY) {
+        history->count++;
+    }
+}
+
+static int nebula_observe(History *history, int steps_back, int *ok) {
+    int idx;
+    if (ok) {
+        *ok = 0;
+    }
+    if (!history || history->count == 0 || steps_back < 0 || steps_back >= history->count) {
+        return 0;
+    }
+    idx = (history->head - steps_back + MAX_HISTORY) % MAX_HISTORY;
+    if (ok) {
+        *ok = 1;
+    }
+    return history->values[idx];
 }

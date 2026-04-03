@@ -75,6 +75,7 @@ WS              [ \t\r]+
 "print"             { return PRINT; }
 "display"           { return PRINT; }
 "input"             { return INPUT; }
+"nebula"            { return NEBULA; }
 "true"              { return TRUE; }
 "false"             { return FALSE; }
 

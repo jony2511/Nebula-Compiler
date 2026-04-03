@@ -43,6 +43,7 @@ void yyerror(const char *msg);
 %token IF ELSE SWITCH CASE DEFAULT WHILE DO FOR
 %token BREAK CONTINUE RETURN FUNCTION
 %token WHEN OTHERWISE LOOP GIVE PRINT INPUT
+%token NEBULA
 %token TRUE FALSE
 
 %token INC DECREMENT
@@ -882,6 +883,15 @@ primary_expr
     | INPUT LPAREN RPAREN
       {
           $$ = make_expr(TYPE_UNKNOWN, new_ast_node(AST_INPUT, "input"));
+      }
+    | NEBULA LPAREN IDENTIFIER COMMA expression RPAREN
+      {
+          ASTNode *id = new_ast_node(AST_IDENTIFIER, $3);
+          ASTNode *call = new_ast_node(AST_FUNC_CALL, "nebula");
+          id->inferred_type = resolve_identifier_type($3, line_no);
+          call->left = append_node(id, $5.node);
+          $$ = make_expr(TYPE_NUM, call);
+          free($3);
       }
     | LPAREN expression RPAREN
       {

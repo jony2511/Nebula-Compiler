@@ -4,3 +4,4 @@ display(a);
 a = a * 2;
 
 display(a);
+display(nebula(a,0));

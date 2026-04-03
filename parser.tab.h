@@ -93,46 +93,47 @@ extern int yydebug;
     GIVE = 288,                    /* GIVE  */
     PRINT = 289,                   /* PRINT  */
     INPUT = 290,                   /* INPUT  */
-    TRUE = 291,                    /* TRUE  */
-    FALSE = 292,                   /* FALSE  */
-    INC = 293,                     /* INC  */
-    DECREMENT = 294,               /* DECREMENT  */
-    EQ = 295,                      /* EQ  */
-    NEQ = 296,                     /* NEQ  */
-    LE = 297,                      /* LE  */
-    GE = 298,                      /* GE  */
-    LT = 299,                      /* LT  */
-    GT = 300,                      /* GT  */
-    ASSIGN = 301,                  /* ASSIGN  */
-    AND = 302,                     /* AND  */
-    OR = 303,                      /* OR  */
-    BIT_AND = 304,                 /* BIT_AND  */
-    BIT_OR = 305,                  /* BIT_OR  */
-    BIT_XOR = 306,                 /* BIT_XOR  */
-    BIT_NOT = 307,                 /* BIT_NOT  */
-    LSHIFT = 308,                  /* LSHIFT  */
-    RSHIFT = 309,                  /* RSHIFT  */
-    PLUS = 310,                    /* PLUS  */
-    MINUS = 311,                   /* MINUS  */
-    MUL = 312,                     /* MUL  */
-    DIV = 313,                     /* DIV  */
-    NOT = 314,                     /* NOT  */
-    QMARK = 315,                   /* QMARK  */
-    COLON = 316,                   /* COLON  */
-    ARROW_R = 317,                 /* ARROW_R  */
-    ARROW_L = 318,                 /* ARROW_L  */
-    SEMICOLON = 319,               /* SEMICOLON  */
-    COMMA = 320,                   /* COMMA  */
-    LPAREN = 321,                  /* LPAREN  */
-    RPAREN = 322,                  /* RPAREN  */
-    LBRACE = 323,                  /* LBRACE  */
-    RBRACE = 324,                  /* RBRACE  */
-    LBRACKET = 325,                /* LBRACKET  */
-    RBRACKET = 326,                /* RBRACKET  */
-    INVALID = 327,                 /* INVALID  */
-    LOWER_THAN_OTHERWISE = 328,    /* LOWER_THAN_OTHERWISE  */
-    UMINUS = 329,                  /* UMINUS  */
-    UPLUS = 330                    /* UPLUS  */
+    NEBULA = 291,                  /* NEBULA  */
+    TRUE = 292,                    /* TRUE  */
+    FALSE = 293,                   /* FALSE  */
+    INC = 294,                     /* INC  */
+    DECREMENT = 295,               /* DECREMENT  */
+    EQ = 296,                      /* EQ  */
+    NEQ = 297,                     /* NEQ  */
+    LE = 298,                      /* LE  */
+    GE = 299,                      /* GE  */
+    LT = 300,                      /* LT  */
+    GT = 301,                      /* GT  */
+    ASSIGN = 302,                  /* ASSIGN  */
+    AND = 303,                     /* AND  */
+    OR = 304,                      /* OR  */
+    BIT_AND = 305,                 /* BIT_AND  */
+    BIT_OR = 306,                  /* BIT_OR  */
+    BIT_XOR = 307,                 /* BIT_XOR  */
+    BIT_NOT = 308,                 /* BIT_NOT  */
+    LSHIFT = 309,                  /* LSHIFT  */
+    RSHIFT = 310,                  /* RSHIFT  */
+    PLUS = 311,                    /* PLUS  */
+    MINUS = 312,                   /* MINUS  */
+    MUL = 313,                     /* MUL  */
+    DIV = 314,                     /* DIV  */
+    NOT = 315,                     /* NOT  */
+    QMARK = 316,                   /* QMARK  */
+    COLON = 317,                   /* COLON  */
+    ARROW_R = 318,                 /* ARROW_R  */
+    ARROW_L = 319,                 /* ARROW_L  */
+    SEMICOLON = 320,               /* SEMICOLON  */
+    COMMA = 321,                   /* COMMA  */
+    LPAREN = 322,                  /* LPAREN  */
+    RPAREN = 323,                  /* RPAREN  */
+    LBRACE = 324,                  /* LBRACE  */
+    RBRACE = 325,                  /* RBRACE  */
+    LBRACKET = 326,                /* LBRACKET  */
+    RBRACKET = 327,                /* RBRACKET  */
+    INVALID = 328,                 /* INVALID  */
+    LOWER_THAN_OTHERWISE = 329,    /* LOWER_THAN_OTHERWISE  */
+    UMINUS = 330,                  /* UMINUS  */
+    UPLUS = 331                    /* UPLUS  */
   };
   typedef enum yytokentype yytoken_kind_t;
 #endif
@@ -151,7 +152,7 @@ union YYSTYPE
     ASTNode *node;
     ExprAttr expr;
 
-#line 155 "parser.tab.h"
+#line 156 "parser.tab.h"
 
 };
 typedef union YYSTYPE YYSTYPE;

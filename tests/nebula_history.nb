@@ -1,0 +1,10 @@
+num a = 10;
+num x = 5;
+
+a = a + 5;
+x = x + 3;
+a = a * 2;
+
+display(nebula(a, 1));
+display(nebula(a, 3));
+display(nebula(x, 1));
