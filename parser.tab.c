@@ -92,6 +92,39 @@ typedef enum {
     TYPE_VOID
 } NebulaType;
 
+typedef enum {
+    AST_PROGRAM = 0,
+    AST_STMT_LIST,
+    AST_DECL,
+    AST_ASSIGN,
+    AST_EXPR_STMT,
+    AST_IF,
+    AST_LOOP,
+    AST_WHILE,
+    AST_DO_WHILE,
+    AST_FOR,
+    AST_PRINT,
+    AST_INPUT,
+    AST_BINOP,
+    AST_UNARYOP,
+    AST_LITERAL,
+    AST_IDENTIFIER,
+    AST_FUNC_CALL
+} ASTNodeType;
+
+typedef struct ASTNode {
+    ASTNodeType kind;
+    NebulaType inferred_type;
+    char *text;
+    struct ASTNode *left;
+    struct ASTNode *right;
+    struct ASTNode *third;
+    struct ASTNode *body;
+    struct ASTNode *next;
+} ASTNode;
+
+typedef struct ExprAttr ExprAttr;
+
 typedef struct Symbol {
     char *name;
     NebulaType type;
@@ -102,6 +135,7 @@ typedef struct Symbol {
 static Symbol *symbol_table = NULL;
 static int current_scope = 0;
 static NebulaType current_decl_type = TYPE_UNKNOWN;
+static ASTNode *ast_root = NULL;
 
 static const char *type_name(NebulaType t);
 static int is_numeric(NebulaType t);
@@ -125,9 +159,17 @@ static NebulaType unary_bitnot_type(NebulaType t, int line);
 static NebulaType incdec_type(NebulaType t, const char *op, int line);
 static void check_condition_type(NebulaType cond_type, int line, const char *kw);
 
+static ExprAttr make_expr(NebulaType type, ASTNode *node);
+static ASTNode *new_ast_node(ASTNodeType kind, const char *text);
+static ASTNode *new_ast_unary(ASTNodeType kind, const char *op, ASTNode *child, NebulaType t);
+static ASTNode *new_ast_binary(ASTNodeType kind, const char *op, ASTNode *lhs, ASTNode *rhs, NebulaType t);
+static ASTNode *append_node(ASTNode *list, ASTNode *node);
+static void print_ast(const ASTNode *node, int indent);
+static const char *ast_kind_name(ASTNodeType kind);
+
 void yyerror(const char *msg);
 
-#line 131 "parser.tab.c"
+#line 173 "parser.tab.c"
 
 # ifndef YY_CAST
 #  ifdef __cplusplus
@@ -673,19 +715,19 @@ static const yytype_int8 yytranslate[] =
 /* YYRLINE[YYN] -- Source line where rule number YYN was defined.  */
 static const yytype_int16 yyrline[] =
 {
-       0,   133,   133,   137,   138,   142,   143,   147,   154,   155,
-     159,   160,   164,   171,   172,   173,   174,   175,   176,   177,
-     178,   183,   182,   193,   194,   198,   199,   203,   204,   205,
-     206,   207,   208,   209,   210,   219,   218,   226,   227,   231,
-     236,   247,   248,   252,   256,   260,   264,   268,   272,   273,
-     277,   281,   282,   286,   292,   296,   300,   309,   310,   314,
-     315,   316,   317,   321,   322,   330,   331,   335,   336,   340,
-     344,   352,   353,   357,   358,   362,   367,   369,   382,   384,
-     399,   401,   406,   408,   413,   415,   420,   422,   427,   429,
-     434,   436,   438,   443,   445,   447,   449,   451,   456,   458,
-     460,   465,   467,   469,   474,   476,   478,   483,   485,   487,
-     489,   491,   493,   495,   500,   502,   504,   506,   516,   521,
-     523,   525,   527,   532,   534,   536,   538,   540
+       0,   189,   189,   199,   202,   209,   213,   220,   233,   236,
+     243,   247,   254,   264,   265,   266,   267,   268,   269,   270,
+     271,   276,   275,   290,   293,   300,   304,   311,   315,   319,
+     323,   327,   331,   335,   339,   349,   348,   359,   363,   370,
+     378,   393,   399,   406,   414,   423,   431,   440,   452,   455,
+     462,   473,   476,   485,   497,   505,   513,   529,   532,   539,
+     545,   551,   555,   562,   568,   579,   582,   589,   593,   600,
+     607,   618,   621,   628,   632,   639,   646,   650,   668,   672,
+     694,   698,   706,   710,   718,   722,   730,   734,   742,   746,
+     754,   758,   763,   771,   775,   780,   785,   790,   798,   802,
+     807,   815,   819,   824,   832,   836,   841,   849,   853,   858,
+     863,   868,   873,   878,   886,   890,   895,   900,   911,   919,
+     925,   931,   937,   942,   946,   950,   954,   958
 };
 #endif
 
@@ -1743,571 +1785,1158 @@ yyreduce:
   YY_REDUCE_PRINT (yyn);
   switch (yyn)
     {
-  case 7: /* function_def: FUNCTION type_spec IDENTIFIER LPAREN parameter_list_opt RPAREN compound_stmt  */
-#line 148 "parser.y"
+  case 2: /* program: translation_unit  */
+#line 190 "parser.y"
       {
-          free((yyvsp[-4].str_val));
+          ast_root = new_ast_node(AST_PROGRAM, "program");
+          ast_root->left = (yyvsp[0].node);
+          (yyval.node) = ast_root;
       }
-#line 1752 "parser.tab.c"
-    break;
-
-  case 12: /* parameter: type_spec IDENTIFIER  */
-#line 165 "parser.y"
-        {
-            free((yyvsp[0].str_val));
-        }
-#line 1760 "parser.tab.c"
-    break;
-
-  case 13: /* type_spec: NUM  */
-#line 171 "parser.y"
-                 { (yyval.type_val) = TYPE_NUM; }
-#line 1766 "parser.tab.c"
-    break;
-
-  case 14: /* type_spec: DEC  */
-#line 172 "parser.y"
-                 { (yyval.type_val) = TYPE_DEC; }
-#line 1772 "parser.tab.c"
-    break;
-
-  case 15: /* type_spec: CHAR  */
-#line 173 "parser.y"
-                 { (yyval.type_val) = TYPE_CHAR; }
-#line 1778 "parser.tab.c"
-    break;
-
-  case 16: /* type_spec: BOOL  */
-#line 174 "parser.y"
-                 { (yyval.type_val) = TYPE_BOOL; }
-#line 1784 "parser.tab.c"
-    break;
-
-  case 17: /* type_spec: VOID  */
-#line 175 "parser.y"
-                 { (yyval.type_val) = TYPE_VOID; }
-#line 1790 "parser.tab.c"
-    break;
-
-  case 18: /* type_spec: INT  */
-#line 176 "parser.y"
-                 { (yyval.type_val) = TYPE_NUM; }
 #line 1796 "parser.tab.c"
     break;
 
-  case 19: /* type_spec: FLOAT  */
-#line 177 "parser.y"
-                 { (yyval.type_val) = TYPE_DEC; }
-#line 1802 "parser.tab.c"
-    break;
-
-  case 20: /* type_spec: DOUBLE  */
-#line 178 "parser.y"
-                 { (yyval.type_val) = TYPE_DEC; }
-#line 1808 "parser.tab.c"
-    break;
-
-  case 21: /* $@1: %empty  */
-#line 183 "parser.y"
+  case 3: /* translation_unit: %empty  */
+#line 199 "parser.y"
       {
-          enter_scope();
+          (yyval.node) = NULL;
       }
-#line 1816 "parser.tab.c"
+#line 1804 "parser.tab.c"
     break;
 
-  case 22: /* compound_stmt: LBRACE $@1 stmt_list_opt RBRACE  */
-#line 187 "parser.y"
+  case 4: /* translation_unit: translation_unit external_decl  */
+#line 203 "parser.y"
       {
-          exit_scope();
+          (yyval.node) = append_node((yyvsp[-1].node), (yyvsp[0].node));
       }
-#line 1824 "parser.tab.c"
+#line 1812 "parser.tab.c"
     break;
 
-  case 34: /* statement: error SEMICOLON  */
-#line 211 "parser.y"
-        {
-            fprintf(stderr, "Recovered from syntax error at line %d.\n", line_no);
-            yyerrok;
-        }
-#line 1833 "parser.tab.c"
-    break;
-
-  case 35: /* $@2: %empty  */
-#line 219 "parser.y"
+  case 5: /* external_decl: function_def  */
+#line 210 "parser.y"
       {
-          current_decl_type = (NebulaType)(yyvsp[0].type_val);
+          (yyval.node) = (yyvsp[0].node);
+      }
+#line 1820 "parser.tab.c"
+    break;
+
+  case 6: /* external_decl: statement  */
+#line 214 "parser.y"
+      {
+          (yyval.node) = (yyvsp[0].node);
+      }
+#line 1828 "parser.tab.c"
+    break;
+
+  case 7: /* function_def: FUNCTION type_spec IDENTIFIER LPAREN parameter_list_opt RPAREN compound_stmt  */
+#line 221 "parser.y"
+      {
+          ASTNode *fn = new_ast_node(AST_FUNC_CALL, (yyvsp[-4].str_val));
+          fn->inferred_type = (NebulaType)(yyvsp[-5].type_val);
+          fn->left = (yyvsp[-2].node);
+          fn->body = (yyvsp[0].node);
+          (yyval.node) = fn;
+          free((yyvsp[-4].str_val));
       }
 #line 1841 "parser.tab.c"
     break;
 
-  case 39: /* init_declarator: IDENTIFIER  */
-#line 232 "parser.y"
-        {
-            declare_variable((yyvsp[0].str_val), current_decl_type, line_no);
-            free((yyvsp[0].str_val));
-        }
-#line 1850 "parser.tab.c"
-    break;
-
-  case 40: /* init_declarator: IDENTIFIER ASSIGN expression  */
-#line 237 "parser.y"
-        {
-            declare_variable((yyvsp[-2].str_val), current_decl_type, line_no);
-            if (!is_assignment_compatible(current_decl_type, (NebulaType)(yyvsp[0].type_val))) {
-                semantic_error(line_no, "Type mismatch in declaration assignment (%s = %s)", type_name(current_decl_type), type_name((NebulaType)(yyvsp[0].type_val)));
-            }
-            free((yyvsp[-2].str_val));
-        }
-#line 1862 "parser.tab.c"
-    break;
-
-  case 43: /* selection_stmt: WHEN LPAREN expression RPAREN statement  */
-#line 253 "parser.y"
-            {
-                    check_condition_type((NebulaType)(yyvsp[-2].type_val), line_no, "when");
-            }
-#line 1870 "parser.tab.c"
-    break;
-
-  case 44: /* selection_stmt: WHEN LPAREN expression RPAREN statement OTHERWISE statement  */
-#line 257 "parser.y"
-            {
-                    check_condition_type((NebulaType)(yyvsp[-4].type_val), line_no, "when");
-            }
-#line 1878 "parser.tab.c"
-    break;
-
-  case 45: /* selection_stmt: IF LPAREN expression RPAREN statement  */
-#line 261 "parser.y"
-            {
-                    check_condition_type((NebulaType)(yyvsp[-2].type_val), line_no, "if");
-            }
-#line 1886 "parser.tab.c"
-    break;
-
-  case 46: /* selection_stmt: IF LPAREN expression RPAREN statement ELSE statement  */
-#line 265 "parser.y"
-            {
-                    check_condition_type((NebulaType)(yyvsp[-4].type_val), line_no, "if");
-            }
-#line 1894 "parser.tab.c"
-    break;
-
-  case 53: /* loop_stmt: LOOP LPAREN opt_expr SEMICOLON opt_expr SEMICOLON opt_expr RPAREN statement  */
-#line 287 "parser.y"
-            {
-                    if ((NebulaType)(yyvsp[-4].type_val) != TYPE_UNKNOWN) {
-                            check_condition_type((NebulaType)(yyvsp[-4].type_val), line_no, "loop");
-                    }
-            }
-#line 1904 "parser.tab.c"
-    break;
-
-  case 54: /* loop_stmt: WHILE LPAREN expression RPAREN statement  */
-#line 293 "parser.y"
-            {
-                    check_condition_type((NebulaType)(yyvsp[-2].type_val), line_no, "while");
-            }
-#line 1912 "parser.tab.c"
-    break;
-
-  case 55: /* loop_stmt: DO statement WHILE LPAREN expression RPAREN SEMICOLON  */
-#line 297 "parser.y"
+  case 8: /* parameter_list_opt: %empty  */
+#line 233 "parser.y"
       {
-          check_condition_type((NebulaType)(yyvsp[-2].type_val), line_no, "do-while");
+          (yyval.node) = NULL;
       }
+#line 1849 "parser.tab.c"
+    break;
+
+  case 9: /* parameter_list_opt: parameter_list  */
+#line 237 "parser.y"
+      {
+          (yyval.node) = (yyvsp[0].node);
+      }
+#line 1857 "parser.tab.c"
+    break;
+
+  case 10: /* parameter_list: parameter  */
+#line 244 "parser.y"
+      {
+          (yyval.node) = (yyvsp[0].node);
+      }
+#line 1865 "parser.tab.c"
+    break;
+
+  case 11: /* parameter_list: parameter_list COMMA parameter  */
+#line 248 "parser.y"
+      {
+          (yyval.node) = append_node((yyvsp[-2].node), (yyvsp[0].node));
+      }
+#line 1873 "parser.tab.c"
+    break;
+
+  case 12: /* parameter: type_spec IDENTIFIER  */
+#line 255 "parser.y"
+      {
+          ASTNode *id = new_ast_node(AST_IDENTIFIER, (yyvsp[0].str_val));
+          id->inferred_type = (NebulaType)(yyvsp[-1].type_val);
+          (yyval.node) = id;
+          free((yyvsp[0].str_val));
+      }
+#line 1884 "parser.tab.c"
+    break;
+
+  case 13: /* type_spec: NUM  */
+#line 264 "parser.y"
+                 { (yyval.type_val) = TYPE_NUM; }
+#line 1890 "parser.tab.c"
+    break;
+
+  case 14: /* type_spec: DEC  */
+#line 265 "parser.y"
+                 { (yyval.type_val) = TYPE_DEC; }
+#line 1896 "parser.tab.c"
+    break;
+
+  case 15: /* type_spec: CHAR  */
+#line 266 "parser.y"
+                 { (yyval.type_val) = TYPE_CHAR; }
+#line 1902 "parser.tab.c"
+    break;
+
+  case 16: /* type_spec: BOOL  */
+#line 267 "parser.y"
+                 { (yyval.type_val) = TYPE_BOOL; }
+#line 1908 "parser.tab.c"
+    break;
+
+  case 17: /* type_spec: VOID  */
+#line 268 "parser.y"
+                 { (yyval.type_val) = TYPE_VOID; }
+#line 1914 "parser.tab.c"
+    break;
+
+  case 18: /* type_spec: INT  */
+#line 269 "parser.y"
+                 { (yyval.type_val) = TYPE_NUM; }
 #line 1920 "parser.tab.c"
     break;
 
-  case 56: /* loop_stmt: FOR LPAREN opt_expr SEMICOLON opt_expr SEMICOLON opt_expr RPAREN statement  */
-#line 301 "parser.y"
-            {
-                    if ((NebulaType)(yyvsp[-4].type_val) != TYPE_UNKNOWN) {
-                            check_condition_type((NebulaType)(yyvsp[-4].type_val), line_no, "for");
-                    }
-            }
-#line 1930 "parser.tab.c"
+  case 19: /* type_spec: FLOAT  */
+#line 270 "parser.y"
+                 { (yyval.type_val) = TYPE_DEC; }
+#line 1926 "parser.tab.c"
     break;
 
-  case 57: /* opt_expr: %empty  */
-#line 309 "parser.y"
-                      { (yyval.type_val) = TYPE_UNKNOWN; }
-#line 1936 "parser.tab.c"
+  case 20: /* type_spec: DOUBLE  */
+#line 271 "parser.y"
+                 { (yyval.type_val) = TYPE_DEC; }
+#line 1932 "parser.tab.c"
     break;
 
-  case 58: /* opt_expr: expression  */
-#line 310 "parser.y"
-                      { (yyval.type_val) = (yyvsp[0].type_val); }
-#line 1942 "parser.tab.c"
+  case 21: /* $@1: %empty  */
+#line 276 "parser.y"
+      {
+          enter_scope();
+      }
+#line 1940 "parser.tab.c"
     break;
 
-  case 64: /* io_stmt: INPUT LPAREN IDENTIFIER RPAREN SEMICOLON  */
-#line 323 "parser.y"
-        {
-            (void)resolve_identifier_type((yyvsp[-2].str_val), line_no);
-            free((yyvsp[-2].str_val));
-        }
+  case 22: /* compound_stmt: LBRACE $@1 stmt_list_opt RBRACE  */
+#line 280 "parser.y"
+      {
+          ASTNode *list = new_ast_node(AST_STMT_LIST, "block");
+          list->left = (yyvsp[-1].node);
+          (yyval.node) = list;
+          exit_scope();
+      }
 #line 1951 "parser.tab.c"
     break;
 
-  case 70: /* function_call: IDENTIFIER LPAREN argument_list_opt RPAREN  */
-#line 345 "parser.y"
-        {
-            /* Function symbols will be handled in later phases; keep type unknown for now. */
-            free((yyvsp[-3].str_val));
-        }
-#line 1960 "parser.tab.c"
+  case 23: /* stmt_list_opt: %empty  */
+#line 290 "parser.y"
+      {
+          (yyval.node) = NULL;
+      }
+#line 1959 "parser.tab.c"
     break;
 
-  case 75: /* expression: assignment_expr  */
-#line 363 "parser.y"
-        { (yyval.type_val) = (yyvsp[0].type_val); }
-#line 1966 "parser.tab.c"
+  case 24: /* stmt_list_opt: stmt_list  */
+#line 294 "parser.y"
+      {
+          (yyval.node) = (yyvsp[0].node);
+      }
+#line 1967 "parser.tab.c"
     break;
 
-  case 76: /* assignment_expr: conditional_expr  */
-#line 368 "parser.y"
-        { (yyval.type_val) = (yyvsp[0].type_val); }
-#line 1972 "parser.tab.c"
+  case 25: /* stmt_list: statement  */
+#line 301 "parser.y"
+      {
+          (yyval.node) = (yyvsp[0].node);
+      }
+#line 1975 "parser.tab.c"
     break;
 
-  case 77: /* assignment_expr: IDENTIFIER ASSIGN assignment_expr  */
-#line 370 "parser.y"
-        {
-            NebulaType lhs = resolve_identifier_type((yyvsp[-2].str_val), line_no);
-            NebulaType rhs = (NebulaType)(yyvsp[0].type_val);
-            if (lhs != TYPE_UNKNOWN && rhs != TYPE_UNKNOWN && !is_assignment_compatible(lhs, rhs)) {
-                semantic_error(line_no, "Type mismatch in assignment (%s = %s)", type_name(lhs), type_name(rhs));
-            }
-            (yyval.type_val) = lhs;
-            free((yyvsp[-2].str_val));
-        }
-#line 1986 "parser.tab.c"
+  case 26: /* stmt_list: stmt_list statement  */
+#line 305 "parser.y"
+      {
+          (yyval.node) = append_node((yyvsp[-1].node), (yyvsp[0].node));
+      }
+#line 1983 "parser.tab.c"
     break;
 
-  case 78: /* conditional_expr: logical_or_expr  */
-#line 383 "parser.y"
-        { (yyval.type_val) = (yyvsp[0].type_val); }
-#line 1992 "parser.tab.c"
+  case 27: /* statement: declaration_stmt  */
+#line 312 "parser.y"
+      {
+          (yyval.node) = (yyvsp[0].node);
+      }
+#line 1991 "parser.tab.c"
     break;
 
-  case 79: /* conditional_expr: logical_or_expr QMARK expression COLON conditional_expr  */
-#line 385 "parser.y"
-        {
-            check_condition_type((NebulaType)(yyvsp[-4].type_val), line_no, "?:");
-            if (is_assignment_compatible((NebulaType)(yyvsp[-2].type_val), (NebulaType)(yyvsp[0].type_val))) {
-                (yyval.type_val) = (yyvsp[-2].type_val);
-            } else if (is_assignment_compatible((NebulaType)(yyvsp[0].type_val), (NebulaType)(yyvsp[-2].type_val))) {
-                (yyval.type_val) = (yyvsp[0].type_val);
-            } else {
-                semantic_error(line_no, "Type mismatch in conditional expression (%s : %s)", type_name((NebulaType)(yyvsp[-2].type_val)), type_name((NebulaType)(yyvsp[0].type_val)));
-                (yyval.type_val) = TYPE_UNKNOWN;
-            }
-        }
-#line 2008 "parser.tab.c"
+  case 28: /* statement: expression_stmt  */
+#line 316 "parser.y"
+      {
+          (yyval.node) = (yyvsp[0].node);
+      }
+#line 1999 "parser.tab.c"
     break;
 
-  case 80: /* logical_or_expr: logical_and_expr  */
+  case 29: /* statement: selection_stmt  */
+#line 320 "parser.y"
+      {
+          (yyval.node) = (yyvsp[0].node);
+      }
+#line 2007 "parser.tab.c"
+    break;
+
+  case 30: /* statement: loop_stmt  */
+#line 324 "parser.y"
+      {
+          (yyval.node) = (yyvsp[0].node);
+      }
+#line 2015 "parser.tab.c"
+    break;
+
+  case 31: /* statement: jump_stmt  */
+#line 328 "parser.y"
+      {
+          (yyval.node) = (yyvsp[0].node);
+      }
+#line 2023 "parser.tab.c"
+    break;
+
+  case 32: /* statement: io_stmt  */
+#line 332 "parser.y"
+      {
+          (yyval.node) = (yyvsp[0].node);
+      }
+#line 2031 "parser.tab.c"
+    break;
+
+  case 33: /* statement: compound_stmt  */
+#line 336 "parser.y"
+      {
+          (yyval.node) = (yyvsp[0].node);
+      }
+#line 2039 "parser.tab.c"
+    break;
+
+  case 34: /* statement: error SEMICOLON  */
+#line 340 "parser.y"
+      {
+          fprintf(stderr, "Recovered from syntax error at line %d.\n", line_no);
+          yyerrok;
+          (yyval.node) = NULL;
+      }
+#line 2049 "parser.tab.c"
+    break;
+
+  case 35: /* $@2: %empty  */
+#line 349 "parser.y"
+      {
+          current_decl_type = (NebulaType)(yyvsp[0].type_val);
+      }
+#line 2057 "parser.tab.c"
+    break;
+
+  case 36: /* declaration_stmt: type_spec $@2 init_declarator_list SEMICOLON  */
+#line 353 "parser.y"
+      {
+          (yyval.node) = (yyvsp[-1].node);
+      }
+#line 2065 "parser.tab.c"
+    break;
+
+  case 37: /* init_declarator_list: init_declarator  */
+#line 360 "parser.y"
+      {
+          (yyval.node) = (yyvsp[0].node);
+      }
+#line 2073 "parser.tab.c"
+    break;
+
+  case 38: /* init_declarator_list: init_declarator_list COMMA init_declarator  */
+#line 364 "parser.y"
+      {
+          (yyval.node) = append_node((yyvsp[-2].node), (yyvsp[0].node));
+      }
+#line 2081 "parser.tab.c"
+    break;
+
+  case 39: /* init_declarator: IDENTIFIER  */
+#line 371 "parser.y"
+      {
+          ASTNode *decl = new_ast_node(AST_DECL, (yyvsp[0].str_val));
+          decl->inferred_type = current_decl_type;
+          declare_variable((yyvsp[0].str_val), current_decl_type, line_no);
+          (yyval.node) = decl;
+          free((yyvsp[0].str_val));
+      }
+#line 2093 "parser.tab.c"
+    break;
+
+  case 40: /* init_declarator: IDENTIFIER ASSIGN expression  */
+#line 379 "parser.y"
+      {
+          ASTNode *decl = new_ast_node(AST_DECL, (yyvsp[-2].str_val));
+          decl->inferred_type = current_decl_type;
+          decl->left = (yyvsp[0].expr).node;
+          declare_variable((yyvsp[-2].str_val), current_decl_type, line_no);
+          if (!is_assignment_compatible(current_decl_type, (yyvsp[0].expr).type)) {
+              semantic_error(line_no, "Type mismatch in declaration assignment (%s = %s)", type_name(current_decl_type), type_name((yyvsp[0].expr).type));
+          }
+          (yyval.node) = decl;
+          free((yyvsp[-2].str_val));
+      }
+#line 2109 "parser.tab.c"
+    break;
+
+  case 41: /* expression_stmt: expression SEMICOLON  */
+#line 394 "parser.y"
+      {
+          ASTNode *st = new_ast_node(AST_EXPR_STMT, "expr");
+          st->left = (yyvsp[-1].expr).node;
+          (yyval.node) = st;
+      }
+#line 2119 "parser.tab.c"
+    break;
+
+  case 42: /* expression_stmt: SEMICOLON  */
 #line 400 "parser.y"
-        { (yyval.type_val) = (yyvsp[0].type_val); }
-#line 2014 "parser.tab.c"
+      {
+          (yyval.node) = NULL;
+      }
+#line 2127 "parser.tab.c"
     break;
 
-  case 81: /* logical_or_expr: logical_or_expr OR logical_and_expr  */
-#line 402 "parser.y"
-        { (yyval.type_val) = logical_result_type((NebulaType)(yyvsp[-2].type_val), (NebulaType)(yyvsp[0].type_val), "||", line_no); }
-#line 2020 "parser.tab.c"
-    break;
-
-  case 82: /* logical_and_expr: bitwise_or_expr  */
+  case 43: /* selection_stmt: WHEN LPAREN expression RPAREN statement  */
 #line 407 "parser.y"
-        { (yyval.type_val) = (yyvsp[0].type_val); }
-#line 2026 "parser.tab.c"
+      {
+          ASTNode *node = new_ast_node(AST_IF, "when");
+          node->left = (yyvsp[-2].expr).node;
+          node->right = (yyvsp[0].node);
+          check_condition_type((yyvsp[-2].expr).type, line_no, "when");
+          (yyval.node) = node;
+      }
+#line 2139 "parser.tab.c"
     break;
 
-  case 83: /* logical_and_expr: logical_and_expr AND bitwise_or_expr  */
-#line 409 "parser.y"
-        { (yyval.type_val) = logical_result_type((NebulaType)(yyvsp[-2].type_val), (NebulaType)(yyvsp[0].type_val), "&&", line_no); }
-#line 2032 "parser.tab.c"
-    break;
-
-  case 84: /* bitwise_or_expr: bitwise_xor_expr  */
-#line 414 "parser.y"
-        { (yyval.type_val) = (yyvsp[0].type_val); }
-#line 2038 "parser.tab.c"
-    break;
-
-  case 85: /* bitwise_or_expr: bitwise_or_expr BIT_OR bitwise_xor_expr  */
-#line 416 "parser.y"
-        { (yyval.type_val) = bitwise_result_type((NebulaType)(yyvsp[-2].type_val), (NebulaType)(yyvsp[0].type_val), "|", line_no); }
-#line 2044 "parser.tab.c"
-    break;
-
-  case 86: /* bitwise_xor_expr: bitwise_and_expr  */
-#line 421 "parser.y"
-        { (yyval.type_val) = (yyvsp[0].type_val); }
-#line 2050 "parser.tab.c"
-    break;
-
-  case 87: /* bitwise_xor_expr: bitwise_xor_expr BIT_XOR bitwise_and_expr  */
-#line 423 "parser.y"
-        { (yyval.type_val) = bitwise_result_type((NebulaType)(yyvsp[-2].type_val), (NebulaType)(yyvsp[0].type_val), "^", line_no); }
-#line 2056 "parser.tab.c"
-    break;
-
-  case 88: /* bitwise_and_expr: equality_expr  */
-#line 428 "parser.y"
-        { (yyval.type_val) = (yyvsp[0].type_val); }
-#line 2062 "parser.tab.c"
-    break;
-
-  case 89: /* bitwise_and_expr: bitwise_and_expr BIT_AND equality_expr  */
-#line 430 "parser.y"
-        { (yyval.type_val) = bitwise_result_type((NebulaType)(yyvsp[-2].type_val), (NebulaType)(yyvsp[0].type_val), "&", line_no); }
-#line 2068 "parser.tab.c"
-    break;
-
-  case 90: /* equality_expr: relational_expr  */
-#line 435 "parser.y"
-        { (yyval.type_val) = (yyvsp[0].type_val); }
-#line 2074 "parser.tab.c"
-    break;
-
-  case 91: /* equality_expr: equality_expr EQ relational_expr  */
-#line 437 "parser.y"
-        { (yyval.type_val) = equality_result_type((NebulaType)(yyvsp[-2].type_val), (NebulaType)(yyvsp[0].type_val), "==", line_no); }
-#line 2080 "parser.tab.c"
-    break;
-
-  case 92: /* equality_expr: equality_expr NEQ relational_expr  */
-#line 439 "parser.y"
-        { (yyval.type_val) = equality_result_type((NebulaType)(yyvsp[-2].type_val), (NebulaType)(yyvsp[0].type_val), "!=", line_no); }
-#line 2086 "parser.tab.c"
-    break;
-
-  case 93: /* relational_expr: shift_expr  */
-#line 444 "parser.y"
-        { (yyval.type_val) = (yyvsp[0].type_val); }
-#line 2092 "parser.tab.c"
-    break;
-
-  case 94: /* relational_expr: relational_expr LT shift_expr  */
-#line 446 "parser.y"
-        { (yyval.type_val) = relational_result_type((NebulaType)(yyvsp[-2].type_val), (NebulaType)(yyvsp[0].type_val), "<", line_no); }
-#line 2098 "parser.tab.c"
-    break;
-
-  case 95: /* relational_expr: relational_expr GT shift_expr  */
-#line 448 "parser.y"
-        { (yyval.type_val) = relational_result_type((NebulaType)(yyvsp[-2].type_val), (NebulaType)(yyvsp[0].type_val), ">", line_no); }
-#line 2104 "parser.tab.c"
-    break;
-
-  case 96: /* relational_expr: relational_expr LE shift_expr  */
-#line 450 "parser.y"
-        { (yyval.type_val) = relational_result_type((NebulaType)(yyvsp[-2].type_val), (NebulaType)(yyvsp[0].type_val), "<=", line_no); }
-#line 2110 "parser.tab.c"
-    break;
-
-  case 97: /* relational_expr: relational_expr GE shift_expr  */
-#line 452 "parser.y"
-        { (yyval.type_val) = relational_result_type((NebulaType)(yyvsp[-2].type_val), (NebulaType)(yyvsp[0].type_val), ">=", line_no); }
-#line 2116 "parser.tab.c"
-    break;
-
-  case 98: /* shift_expr: additive_expr  */
-#line 457 "parser.y"
-        { (yyval.type_val) = (yyvsp[0].type_val); }
-#line 2122 "parser.tab.c"
-    break;
-
-  case 99: /* shift_expr: shift_expr LSHIFT additive_expr  */
-#line 459 "parser.y"
-        { (yyval.type_val) = bitwise_result_type((NebulaType)(yyvsp[-2].type_val), (NebulaType)(yyvsp[0].type_val), "<<", line_no); }
-#line 2128 "parser.tab.c"
-    break;
-
-  case 100: /* shift_expr: shift_expr RSHIFT additive_expr  */
-#line 461 "parser.y"
-        { (yyval.type_val) = bitwise_result_type((NebulaType)(yyvsp[-2].type_val), (NebulaType)(yyvsp[0].type_val), ">>", line_no); }
-#line 2134 "parser.tab.c"
-    break;
-
-  case 101: /* additive_expr: multiplicative_expr  */
-#line 466 "parser.y"
-        { (yyval.type_val) = (yyvsp[0].type_val); }
-#line 2140 "parser.tab.c"
-    break;
-
-  case 102: /* additive_expr: additive_expr PLUS multiplicative_expr  */
-#line 468 "parser.y"
-        { (yyval.type_val) = arithmetic_result_type((NebulaType)(yyvsp[-2].type_val), (NebulaType)(yyvsp[0].type_val), "+", line_no); }
-#line 2146 "parser.tab.c"
-    break;
-
-  case 103: /* additive_expr: additive_expr MINUS multiplicative_expr  */
-#line 470 "parser.y"
-        { (yyval.type_val) = arithmetic_result_type((NebulaType)(yyvsp[-2].type_val), (NebulaType)(yyvsp[0].type_val), "-", line_no); }
+  case 44: /* selection_stmt: WHEN LPAREN expression RPAREN statement OTHERWISE statement  */
+#line 415 "parser.y"
+      {
+          ASTNode *node = new_ast_node(AST_IF, "when-otherwise");
+          node->left = (yyvsp[-4].expr).node;
+          node->right = (yyvsp[-2].node);
+          node->third = (yyvsp[0].node);
+          check_condition_type((yyvsp[-4].expr).type, line_no, "when");
+          (yyval.node) = node;
+      }
 #line 2152 "parser.tab.c"
     break;
 
-  case 104: /* multiplicative_expr: unary_expr  */
-#line 475 "parser.y"
-        { (yyval.type_val) = (yyvsp[0].type_val); }
-#line 2158 "parser.tab.c"
-    break;
-
-  case 105: /* multiplicative_expr: multiplicative_expr MUL unary_expr  */
-#line 477 "parser.y"
-        { (yyval.type_val) = arithmetic_result_type((NebulaType)(yyvsp[-2].type_val), (NebulaType)(yyvsp[0].type_val), "*", line_no); }
+  case 45: /* selection_stmt: IF LPAREN expression RPAREN statement  */
+#line 424 "parser.y"
+      {
+          ASTNode *node = new_ast_node(AST_IF, "if");
+          node->left = (yyvsp[-2].expr).node;
+          node->right = (yyvsp[0].node);
+          check_condition_type((yyvsp[-2].expr).type, line_no, "if");
+          (yyval.node) = node;
+      }
 #line 2164 "parser.tab.c"
     break;
 
-  case 106: /* multiplicative_expr: multiplicative_expr DIV unary_expr  */
-#line 479 "parser.y"
-        { (yyval.type_val) = arithmetic_result_type((NebulaType)(yyvsp[-2].type_val), (NebulaType)(yyvsp[0].type_val), "/", line_no); }
-#line 2170 "parser.tab.c"
+  case 46: /* selection_stmt: IF LPAREN expression RPAREN statement ELSE statement  */
+#line 432 "parser.y"
+      {
+          ASTNode *node = new_ast_node(AST_IF, "if-else");
+          node->left = (yyvsp[-4].expr).node;
+          node->right = (yyvsp[-2].node);
+          node->third = (yyvsp[0].node);
+          check_condition_type((yyvsp[-4].expr).type, line_no, "if");
+          (yyval.node) = node;
+      }
+#line 2177 "parser.tab.c"
     break;
 
-  case 107: /* unary_expr: postfix_expr  */
-#line 484 "parser.y"
-        { (yyval.type_val) = (yyvsp[0].type_val); }
-#line 2176 "parser.tab.c"
+  case 47: /* selection_stmt: SWITCH LPAREN expression RPAREN LBRACE case_clauses_opt default_clause_opt RBRACE  */
+#line 441 "parser.y"
+      {
+          ASTNode *node = new_ast_node(AST_IF, "switch");
+          node->left = (yyvsp[-5].expr).node;
+          node->right = (yyvsp[-2].node);
+          node->third = (yyvsp[-1].node);
+          (yyval.node) = node;
+      }
+#line 2189 "parser.tab.c"
     break;
 
-  case 108: /* unary_expr: PLUS unary_expr  */
-#line 486 "parser.y"
-        { (yyval.type_val) = unary_plus_minus_type((NebulaType)(yyvsp[0].type_val), "+", line_no); }
-#line 2182 "parser.tab.c"
+  case 48: /* case_clauses_opt: %empty  */
+#line 452 "parser.y"
+      {
+          (yyval.node) = NULL;
+      }
+#line 2197 "parser.tab.c"
     break;
 
-  case 109: /* unary_expr: MINUS unary_expr  */
-#line 488 "parser.y"
-        { (yyval.type_val) = unary_plus_minus_type((NebulaType)(yyvsp[0].type_val), "-", line_no); }
-#line 2188 "parser.tab.c"
+  case 49: /* case_clauses_opt: case_clauses_opt case_clause  */
+#line 456 "parser.y"
+      {
+          (yyval.node) = append_node((yyvsp[-1].node), (yyvsp[0].node));
+      }
+#line 2205 "parser.tab.c"
     break;
 
-  case 110: /* unary_expr: NOT unary_expr  */
-#line 490 "parser.y"
-        { (yyval.type_val) = unary_not_type((NebulaType)(yyvsp[0].type_val), line_no); }
-#line 2194 "parser.tab.c"
+  case 50: /* case_clause: CASE expression COLON stmt_list_opt  */
+#line 463 "parser.y"
+      {
+          ASTNode *node = new_ast_node(AST_IF, "case");
+          node->left = (yyvsp[-2].expr).node;
+          node->right = (yyvsp[0].node);
+          (yyval.node) = node;
+      }
+#line 2216 "parser.tab.c"
     break;
 
-  case 111: /* unary_expr: BIT_NOT unary_expr  */
-#line 492 "parser.y"
-        { (yyval.type_val) = unary_bitnot_type((NebulaType)(yyvsp[0].type_val), line_no); }
-#line 2200 "parser.tab.c"
-    break;
-
-  case 112: /* unary_expr: INC unary_expr  */
-#line 494 "parser.y"
-        { (yyval.type_val) = incdec_type((NebulaType)(yyvsp[0].type_val), "++", line_no); }
-#line 2206 "parser.tab.c"
-    break;
-
-  case 113: /* unary_expr: DECREMENT unary_expr  */
-#line 496 "parser.y"
-        { (yyval.type_val) = incdec_type((NebulaType)(yyvsp[0].type_val), "--", line_no); }
-#line 2212 "parser.tab.c"
-    break;
-
-  case 114: /* postfix_expr: primary_expr  */
-#line 501 "parser.y"
-        { (yyval.type_val) = (yyvsp[0].type_val); }
-#line 2218 "parser.tab.c"
-    break;
-
-  case 115: /* postfix_expr: postfix_expr INC  */
-#line 503 "parser.y"
-        { (yyval.type_val) = incdec_type((NebulaType)(yyvsp[-1].type_val), "++", line_no); }
+  case 51: /* default_clause_opt: %empty  */
+#line 473 "parser.y"
+      {
+          (yyval.node) = NULL;
+      }
 #line 2224 "parser.tab.c"
     break;
 
-  case 116: /* postfix_expr: postfix_expr DECREMENT  */
-#line 505 "parser.y"
-        { (yyval.type_val) = incdec_type((NebulaType)(yyvsp[-1].type_val), "--", line_no); }
-#line 2230 "parser.tab.c"
+  case 52: /* default_clause_opt: DEFAULT COLON stmt_list_opt  */
+#line 477 "parser.y"
+      {
+          ASTNode *node = new_ast_node(AST_IF, "default");
+          node->right = (yyvsp[0].node);
+          (yyval.node) = node;
+      }
+#line 2234 "parser.tab.c"
     break;
 
-  case 117: /* postfix_expr: postfix_expr LBRACKET expression RBRACKET  */
-#line 507 "parser.y"
-        {
-            if ((NebulaType)(yyvsp[-1].type_val) != TYPE_NUM) {
-                semantic_error(line_no, "Array index must be num, found %s", type_name((NebulaType)(yyvsp[-1].type_val)));
-            }
-            (yyval.type_val) = (yyvsp[-3].type_val);
-        }
-#line 2241 "parser.tab.c"
-    break;
-
-  case 118: /* primary_expr: IDENTIFIER  */
-#line 517 "parser.y"
-        {
-            (yyval.type_val) = resolve_identifier_type((yyvsp[0].str_val), line_no);
-            free((yyvsp[0].str_val));
-        }
+  case 53: /* loop_stmt: LOOP LPAREN opt_expr SEMICOLON opt_expr SEMICOLON opt_expr RPAREN statement  */
+#line 486 "parser.y"
+      {
+          ASTNode *node = new_ast_node(AST_LOOP, "loop");
+          node->left = (yyvsp[-6].expr).node;
+          node->right = (yyvsp[-4].expr).node;
+          node->third = (yyvsp[-2].expr).node;
+          node->body = (yyvsp[0].node);
+          if ((yyvsp[-4].expr).type != TYPE_UNKNOWN) {
+              check_condition_type((yyvsp[-4].expr).type, line_no, "loop");
+          }
+          (yyval.node) = node;
+      }
 #line 2250 "parser.tab.c"
     break;
 
-  case 119: /* primary_expr: NUM_LITERAL  */
-#line 522 "parser.y"
-        { (yyval.type_val) = TYPE_NUM; }
-#line 2256 "parser.tab.c"
-    break;
-
-  case 120: /* primary_expr: DEC_LITERAL  */
-#line 524 "parser.y"
-        { (yyval.type_val) = TYPE_DEC; }
+  case 54: /* loop_stmt: WHILE LPAREN expression RPAREN statement  */
+#line 498 "parser.y"
+      {
+          ASTNode *node = new_ast_node(AST_WHILE, "while");
+          node->left = (yyvsp[-2].expr).node;
+          node->body = (yyvsp[0].node);
+          check_condition_type((yyvsp[-2].expr).type, line_no, "while");
+          (yyval.node) = node;
+      }
 #line 2262 "parser.tab.c"
     break;
 
+  case 55: /* loop_stmt: DO statement WHILE LPAREN expression RPAREN SEMICOLON  */
+#line 506 "parser.y"
+      {
+          ASTNode *node = new_ast_node(AST_DO_WHILE, "do-while");
+          node->left = (yyvsp[-2].expr).node;
+          node->body = (yyvsp[-5].node);
+          check_condition_type((yyvsp[-2].expr).type, line_no, "do-while");
+          (yyval.node) = node;
+      }
+#line 2274 "parser.tab.c"
+    break;
+
+  case 56: /* loop_stmt: FOR LPAREN opt_expr SEMICOLON opt_expr SEMICOLON opt_expr RPAREN statement  */
+#line 514 "parser.y"
+      {
+          ASTNode *node = new_ast_node(AST_FOR, "for");
+          node->left = (yyvsp[-6].expr).node;
+          node->right = (yyvsp[-4].expr).node;
+          node->third = (yyvsp[-2].expr).node;
+          node->body = (yyvsp[0].node);
+          if ((yyvsp[-4].expr).type != TYPE_UNKNOWN) {
+              check_condition_type((yyvsp[-4].expr).type, line_no, "for");
+          }
+          (yyval.node) = node;
+      }
+#line 2290 "parser.tab.c"
+    break;
+
+  case 57: /* opt_expr: %empty  */
+#line 529 "parser.y"
+      {
+          (yyval.expr) = make_expr(TYPE_UNKNOWN, NULL);
+      }
+#line 2298 "parser.tab.c"
+    break;
+
+  case 58: /* opt_expr: expression  */
+#line 533 "parser.y"
+      {
+          (yyval.expr) = (yyvsp[0].expr);
+      }
+#line 2306 "parser.tab.c"
+    break;
+
+  case 59: /* jump_stmt: GIVE expression SEMICOLON  */
+#line 540 "parser.y"
+      {
+          ASTNode *node = new_ast_node(AST_UNARYOP, "give");
+          node->left = (yyvsp[-1].expr).node;
+          (yyval.node) = node;
+      }
+#line 2316 "parser.tab.c"
+    break;
+
+  case 60: /* jump_stmt: RETURN expression SEMICOLON  */
+#line 546 "parser.y"
+      {
+          ASTNode *node = new_ast_node(AST_UNARYOP, "return");
+          node->left = (yyvsp[-1].expr).node;
+          (yyval.node) = node;
+      }
+#line 2326 "parser.tab.c"
+    break;
+
+  case 61: /* jump_stmt: BREAK SEMICOLON  */
+#line 552 "parser.y"
+      {
+          (yyval.node) = new_ast_node(AST_UNARYOP, "break");
+      }
+#line 2334 "parser.tab.c"
+    break;
+
+  case 62: /* jump_stmt: CONTINUE SEMICOLON  */
+#line 556 "parser.y"
+      {
+          (yyval.node) = new_ast_node(AST_UNARYOP, "continue");
+      }
+#line 2342 "parser.tab.c"
+    break;
+
+  case 63: /* io_stmt: PRINT LPAREN print_arg_list_opt RPAREN SEMICOLON  */
+#line 563 "parser.y"
+      {
+          ASTNode *node = new_ast_node(AST_PRINT, "print");
+          node->left = (yyvsp[-2].node);
+          (yyval.node) = node;
+      }
+#line 2352 "parser.tab.c"
+    break;
+
+  case 64: /* io_stmt: INPUT LPAREN IDENTIFIER RPAREN SEMICOLON  */
+#line 569 "parser.y"
+      {
+          ASTNode *node = new_ast_node(AST_INPUT, (yyvsp[-2].str_val));
+          (void)resolve_identifier_type((yyvsp[-2].str_val), line_no);
+          (yyval.node) = node;
+          free((yyvsp[-2].str_val));
+      }
+#line 2363 "parser.tab.c"
+    break;
+
+  case 65: /* print_arg_list_opt: %empty  */
+#line 579 "parser.y"
+      {
+          (yyval.node) = NULL;
+      }
+#line 2371 "parser.tab.c"
+    break;
+
+  case 66: /* print_arg_list_opt: print_arg_list  */
+#line 583 "parser.y"
+      {
+          (yyval.node) = (yyvsp[0].node);
+      }
+#line 2379 "parser.tab.c"
+    break;
+
+  case 67: /* print_arg_list: print_arg  */
+#line 590 "parser.y"
+      {
+          (yyval.node) = (yyvsp[0].node);
+      }
+#line 2387 "parser.tab.c"
+    break;
+
+  case 68: /* print_arg_list: print_arg_list COMMA print_arg  */
+#line 594 "parser.y"
+      {
+          (yyval.node) = append_node((yyvsp[-2].node), (yyvsp[0].node));
+      }
+#line 2395 "parser.tab.c"
+    break;
+
+  case 69: /* print_arg: expression  */
+#line 601 "parser.y"
+      {
+          (yyval.node) = (yyvsp[0].expr).node;
+      }
+#line 2403 "parser.tab.c"
+    break;
+
+  case 70: /* function_call: IDENTIFIER LPAREN argument_list_opt RPAREN  */
+#line 608 "parser.y"
+      {
+          ASTNode *call = new_ast_node(AST_FUNC_CALL, (yyvsp[-3].str_val));
+          call->left = (yyvsp[-1].node);
+          (yyval.node) = call;
+          free((yyvsp[-3].str_val));
+      }
+#line 2414 "parser.tab.c"
+    break;
+
+  case 71: /* argument_list_opt: %empty  */
+#line 618 "parser.y"
+      {
+          (yyval.node) = NULL;
+      }
+#line 2422 "parser.tab.c"
+    break;
+
+  case 72: /* argument_list_opt: argument_list  */
+#line 622 "parser.y"
+      {
+          (yyval.node) = (yyvsp[0].node);
+      }
+#line 2430 "parser.tab.c"
+    break;
+
+  case 73: /* argument_list: expression  */
+#line 629 "parser.y"
+      {
+          (yyval.node) = (yyvsp[0].expr).node;
+      }
+#line 2438 "parser.tab.c"
+    break;
+
+  case 74: /* argument_list: argument_list COMMA expression  */
+#line 633 "parser.y"
+      {
+          (yyval.node) = append_node((yyvsp[-2].node), (yyvsp[0].expr).node);
+      }
+#line 2446 "parser.tab.c"
+    break;
+
+  case 75: /* expression: assignment_expr  */
+#line 640 "parser.y"
+      {
+          (yyval.expr) = (yyvsp[0].expr);
+      }
+#line 2454 "parser.tab.c"
+    break;
+
+  case 76: /* assignment_expr: conditional_expr  */
+#line 647 "parser.y"
+      {
+          (yyval.expr) = (yyvsp[0].expr);
+      }
+#line 2462 "parser.tab.c"
+    break;
+
+  case 77: /* assignment_expr: IDENTIFIER ASSIGN assignment_expr  */
+#line 651 "parser.y"
+      {
+          NebulaType lhs = resolve_identifier_type((yyvsp[-2].str_val), line_no);
+          NebulaType rhs = (yyvsp[0].expr).type;
+          ASTNode *id = new_ast_node(AST_IDENTIFIER, (yyvsp[-2].str_val));
+          ASTNode *as = new_ast_node(AST_ASSIGN, "=");
+          as->left = id;
+          as->right = (yyvsp[0].expr).node;
+          as->inferred_type = lhs;
+          if (lhs != TYPE_UNKNOWN && rhs != TYPE_UNKNOWN && !is_assignment_compatible(lhs, rhs)) {
+              semantic_error(line_no, "Type mismatch in assignment (%s = %s)", type_name(lhs), type_name(rhs));
+          }
+          (yyval.expr) = make_expr(lhs, as);
+          free((yyvsp[-2].str_val));
+      }
+#line 2481 "parser.tab.c"
+    break;
+
+  case 78: /* conditional_expr: logical_or_expr  */
+#line 669 "parser.y"
+      {
+          (yyval.expr) = (yyvsp[0].expr);
+      }
+#line 2489 "parser.tab.c"
+    break;
+
+  case 79: /* conditional_expr: logical_or_expr QMARK expression COLON conditional_expr  */
+#line 673 "parser.y"
+      {
+          NebulaType out_type;
+          ASTNode *node = new_ast_node(AST_IF, "?:");
+          node->left = (yyvsp[-4].expr).node;
+          node->right = (yyvsp[-2].expr).node;
+          node->third = (yyvsp[0].expr).node;
+          check_condition_type((yyvsp[-4].expr).type, line_no, "?:");
+          if (is_assignment_compatible((yyvsp[-2].expr).type, (yyvsp[0].expr).type)) {
+              out_type = (yyvsp[-2].expr).type;
+          } else if (is_assignment_compatible((yyvsp[0].expr).type, (yyvsp[-2].expr).type)) {
+              out_type = (yyvsp[0].expr).type;
+          } else {
+              semantic_error(line_no, "Type mismatch in conditional expression (%s : %s)", type_name((yyvsp[-2].expr).type), type_name((yyvsp[0].expr).type));
+              out_type = TYPE_UNKNOWN;
+          }
+          node->inferred_type = out_type;
+          (yyval.expr) = make_expr(out_type, node);
+      }
+#line 2512 "parser.tab.c"
+    break;
+
+  case 80: /* logical_or_expr: logical_and_expr  */
+#line 695 "parser.y"
+      {
+          (yyval.expr) = (yyvsp[0].expr);
+      }
+#line 2520 "parser.tab.c"
+    break;
+
+  case 81: /* logical_or_expr: logical_or_expr OR logical_and_expr  */
+#line 699 "parser.y"
+      {
+          NebulaType t = logical_result_type((yyvsp[-2].expr).type, (yyvsp[0].expr).type, "||", line_no);
+          (yyval.expr) = make_expr(t, new_ast_binary(AST_BINOP, "||", (yyvsp[-2].expr).node, (yyvsp[0].expr).node, t));
+      }
+#line 2529 "parser.tab.c"
+    break;
+
+  case 82: /* logical_and_expr: bitwise_or_expr  */
+#line 707 "parser.y"
+      {
+          (yyval.expr) = (yyvsp[0].expr);
+      }
+#line 2537 "parser.tab.c"
+    break;
+
+  case 83: /* logical_and_expr: logical_and_expr AND bitwise_or_expr  */
+#line 711 "parser.y"
+      {
+          NebulaType t = logical_result_type((yyvsp[-2].expr).type, (yyvsp[0].expr).type, "&&", line_no);
+          (yyval.expr) = make_expr(t, new_ast_binary(AST_BINOP, "&&", (yyvsp[-2].expr).node, (yyvsp[0].expr).node, t));
+      }
+#line 2546 "parser.tab.c"
+    break;
+
+  case 84: /* bitwise_or_expr: bitwise_xor_expr  */
+#line 719 "parser.y"
+      {
+          (yyval.expr) = (yyvsp[0].expr);
+      }
+#line 2554 "parser.tab.c"
+    break;
+
+  case 85: /* bitwise_or_expr: bitwise_or_expr BIT_OR bitwise_xor_expr  */
+#line 723 "parser.y"
+      {
+          NebulaType t = bitwise_result_type((yyvsp[-2].expr).type, (yyvsp[0].expr).type, "|", line_no);
+          (yyval.expr) = make_expr(t, new_ast_binary(AST_BINOP, "|", (yyvsp[-2].expr).node, (yyvsp[0].expr).node, t));
+      }
+#line 2563 "parser.tab.c"
+    break;
+
+  case 86: /* bitwise_xor_expr: bitwise_and_expr  */
+#line 731 "parser.y"
+      {
+          (yyval.expr) = (yyvsp[0].expr);
+      }
+#line 2571 "parser.tab.c"
+    break;
+
+  case 87: /* bitwise_xor_expr: bitwise_xor_expr BIT_XOR bitwise_and_expr  */
+#line 735 "parser.y"
+      {
+          NebulaType t = bitwise_result_type((yyvsp[-2].expr).type, (yyvsp[0].expr).type, "^", line_no);
+          (yyval.expr) = make_expr(t, new_ast_binary(AST_BINOP, "^", (yyvsp[-2].expr).node, (yyvsp[0].expr).node, t));
+      }
+#line 2580 "parser.tab.c"
+    break;
+
+  case 88: /* bitwise_and_expr: equality_expr  */
+#line 743 "parser.y"
+      {
+          (yyval.expr) = (yyvsp[0].expr);
+      }
+#line 2588 "parser.tab.c"
+    break;
+
+  case 89: /* bitwise_and_expr: bitwise_and_expr BIT_AND equality_expr  */
+#line 747 "parser.y"
+      {
+          NebulaType t = bitwise_result_type((yyvsp[-2].expr).type, (yyvsp[0].expr).type, "&", line_no);
+          (yyval.expr) = make_expr(t, new_ast_binary(AST_BINOP, "&", (yyvsp[-2].expr).node, (yyvsp[0].expr).node, t));
+      }
+#line 2597 "parser.tab.c"
+    break;
+
+  case 90: /* equality_expr: relational_expr  */
+#line 755 "parser.y"
+      {
+          (yyval.expr) = (yyvsp[0].expr);
+      }
+#line 2605 "parser.tab.c"
+    break;
+
+  case 91: /* equality_expr: equality_expr EQ relational_expr  */
+#line 759 "parser.y"
+      {
+          NebulaType t = equality_result_type((yyvsp[-2].expr).type, (yyvsp[0].expr).type, "==", line_no);
+          (yyval.expr) = make_expr(t, new_ast_binary(AST_BINOP, "==", (yyvsp[-2].expr).node, (yyvsp[0].expr).node, t));
+      }
+#line 2614 "parser.tab.c"
+    break;
+
+  case 92: /* equality_expr: equality_expr NEQ relational_expr  */
+#line 764 "parser.y"
+      {
+          NebulaType t = equality_result_type((yyvsp[-2].expr).type, (yyvsp[0].expr).type, "!=", line_no);
+          (yyval.expr) = make_expr(t, new_ast_binary(AST_BINOP, "!=", (yyvsp[-2].expr).node, (yyvsp[0].expr).node, t));
+      }
+#line 2623 "parser.tab.c"
+    break;
+
+  case 93: /* relational_expr: shift_expr  */
+#line 772 "parser.y"
+      {
+          (yyval.expr) = (yyvsp[0].expr);
+      }
+#line 2631 "parser.tab.c"
+    break;
+
+  case 94: /* relational_expr: relational_expr LT shift_expr  */
+#line 776 "parser.y"
+      {
+          NebulaType t = relational_result_type((yyvsp[-2].expr).type, (yyvsp[0].expr).type, "<", line_no);
+          (yyval.expr) = make_expr(t, new_ast_binary(AST_BINOP, "<", (yyvsp[-2].expr).node, (yyvsp[0].expr).node, t));
+      }
+#line 2640 "parser.tab.c"
+    break;
+
+  case 95: /* relational_expr: relational_expr GT shift_expr  */
+#line 781 "parser.y"
+      {
+          NebulaType t = relational_result_type((yyvsp[-2].expr).type, (yyvsp[0].expr).type, ">", line_no);
+          (yyval.expr) = make_expr(t, new_ast_binary(AST_BINOP, ">", (yyvsp[-2].expr).node, (yyvsp[0].expr).node, t));
+      }
+#line 2649 "parser.tab.c"
+    break;
+
+  case 96: /* relational_expr: relational_expr LE shift_expr  */
+#line 786 "parser.y"
+      {
+          NebulaType t = relational_result_type((yyvsp[-2].expr).type, (yyvsp[0].expr).type, "<=", line_no);
+          (yyval.expr) = make_expr(t, new_ast_binary(AST_BINOP, "<=", (yyvsp[-2].expr).node, (yyvsp[0].expr).node, t));
+      }
+#line 2658 "parser.tab.c"
+    break;
+
+  case 97: /* relational_expr: relational_expr GE shift_expr  */
+#line 791 "parser.y"
+      {
+          NebulaType t = relational_result_type((yyvsp[-2].expr).type, (yyvsp[0].expr).type, ">=", line_no);
+          (yyval.expr) = make_expr(t, new_ast_binary(AST_BINOP, ">=", (yyvsp[-2].expr).node, (yyvsp[0].expr).node, t));
+      }
+#line 2667 "parser.tab.c"
+    break;
+
+  case 98: /* shift_expr: additive_expr  */
+#line 799 "parser.y"
+      {
+          (yyval.expr) = (yyvsp[0].expr);
+      }
+#line 2675 "parser.tab.c"
+    break;
+
+  case 99: /* shift_expr: shift_expr LSHIFT additive_expr  */
+#line 803 "parser.y"
+      {
+          NebulaType t = bitwise_result_type((yyvsp[-2].expr).type, (yyvsp[0].expr).type, "<<", line_no);
+          (yyval.expr) = make_expr(t, new_ast_binary(AST_BINOP, "<<", (yyvsp[-2].expr).node, (yyvsp[0].expr).node, t));
+      }
+#line 2684 "parser.tab.c"
+    break;
+
+  case 100: /* shift_expr: shift_expr RSHIFT additive_expr  */
+#line 808 "parser.y"
+      {
+          NebulaType t = bitwise_result_type((yyvsp[-2].expr).type, (yyvsp[0].expr).type, ">>", line_no);
+          (yyval.expr) = make_expr(t, new_ast_binary(AST_BINOP, ">>", (yyvsp[-2].expr).node, (yyvsp[0].expr).node, t));
+      }
+#line 2693 "parser.tab.c"
+    break;
+
+  case 101: /* additive_expr: multiplicative_expr  */
+#line 816 "parser.y"
+      {
+          (yyval.expr) = (yyvsp[0].expr);
+      }
+#line 2701 "parser.tab.c"
+    break;
+
+  case 102: /* additive_expr: additive_expr PLUS multiplicative_expr  */
+#line 820 "parser.y"
+      {
+          NebulaType t = arithmetic_result_type((yyvsp[-2].expr).type, (yyvsp[0].expr).type, "+", line_no);
+          (yyval.expr) = make_expr(t, new_ast_binary(AST_BINOP, "+", (yyvsp[-2].expr).node, (yyvsp[0].expr).node, t));
+      }
+#line 2710 "parser.tab.c"
+    break;
+
+  case 103: /* additive_expr: additive_expr MINUS multiplicative_expr  */
+#line 825 "parser.y"
+      {
+          NebulaType t = arithmetic_result_type((yyvsp[-2].expr).type, (yyvsp[0].expr).type, "-", line_no);
+          (yyval.expr) = make_expr(t, new_ast_binary(AST_BINOP, "-", (yyvsp[-2].expr).node, (yyvsp[0].expr).node, t));
+      }
+#line 2719 "parser.tab.c"
+    break;
+
+  case 104: /* multiplicative_expr: unary_expr  */
+#line 833 "parser.y"
+      {
+          (yyval.expr) = (yyvsp[0].expr);
+      }
+#line 2727 "parser.tab.c"
+    break;
+
+  case 105: /* multiplicative_expr: multiplicative_expr MUL unary_expr  */
+#line 837 "parser.y"
+      {
+          NebulaType t = arithmetic_result_type((yyvsp[-2].expr).type, (yyvsp[0].expr).type, "*", line_no);
+          (yyval.expr) = make_expr(t, new_ast_binary(AST_BINOP, "*", (yyvsp[-2].expr).node, (yyvsp[0].expr).node, t));
+      }
+#line 2736 "parser.tab.c"
+    break;
+
+  case 106: /* multiplicative_expr: multiplicative_expr DIV unary_expr  */
+#line 842 "parser.y"
+      {
+          NebulaType t = arithmetic_result_type((yyvsp[-2].expr).type, (yyvsp[0].expr).type, "/", line_no);
+          (yyval.expr) = make_expr(t, new_ast_binary(AST_BINOP, "/", (yyvsp[-2].expr).node, (yyvsp[0].expr).node, t));
+      }
+#line 2745 "parser.tab.c"
+    break;
+
+  case 107: /* unary_expr: postfix_expr  */
+#line 850 "parser.y"
+      {
+          (yyval.expr) = (yyvsp[0].expr);
+      }
+#line 2753 "parser.tab.c"
+    break;
+
+  case 108: /* unary_expr: PLUS unary_expr  */
+#line 854 "parser.y"
+      {
+          NebulaType t = unary_plus_minus_type((yyvsp[0].expr).type, "+", line_no);
+          (yyval.expr) = make_expr(t, new_ast_unary(AST_UNARYOP, "+", (yyvsp[0].expr).node, t));
+      }
+#line 2762 "parser.tab.c"
+    break;
+
+  case 109: /* unary_expr: MINUS unary_expr  */
+#line 859 "parser.y"
+      {
+          NebulaType t = unary_plus_minus_type((yyvsp[0].expr).type, "-", line_no);
+          (yyval.expr) = make_expr(t, new_ast_unary(AST_UNARYOP, "-", (yyvsp[0].expr).node, t));
+      }
+#line 2771 "parser.tab.c"
+    break;
+
+  case 110: /* unary_expr: NOT unary_expr  */
+#line 864 "parser.y"
+      {
+          NebulaType t = unary_not_type((yyvsp[0].expr).type, line_no);
+          (yyval.expr) = make_expr(t, new_ast_unary(AST_UNARYOP, "!", (yyvsp[0].expr).node, t));
+      }
+#line 2780 "parser.tab.c"
+    break;
+
+  case 111: /* unary_expr: BIT_NOT unary_expr  */
+#line 869 "parser.y"
+      {
+          NebulaType t = unary_bitnot_type((yyvsp[0].expr).type, line_no);
+          (yyval.expr) = make_expr(t, new_ast_unary(AST_UNARYOP, "~", (yyvsp[0].expr).node, t));
+      }
+#line 2789 "parser.tab.c"
+    break;
+
+  case 112: /* unary_expr: INC unary_expr  */
+#line 874 "parser.y"
+      {
+          NebulaType t = incdec_type((yyvsp[0].expr).type, "++", line_no);
+          (yyval.expr) = make_expr(t, new_ast_unary(AST_UNARYOP, "++", (yyvsp[0].expr).node, t));
+      }
+#line 2798 "parser.tab.c"
+    break;
+
+  case 113: /* unary_expr: DECREMENT unary_expr  */
+#line 879 "parser.y"
+      {
+          NebulaType t = incdec_type((yyvsp[0].expr).type, "--", line_no);
+          (yyval.expr) = make_expr(t, new_ast_unary(AST_UNARYOP, "--", (yyvsp[0].expr).node, t));
+      }
+#line 2807 "parser.tab.c"
+    break;
+
+  case 114: /* postfix_expr: primary_expr  */
+#line 887 "parser.y"
+      {
+          (yyval.expr) = (yyvsp[0].expr);
+      }
+#line 2815 "parser.tab.c"
+    break;
+
+  case 115: /* postfix_expr: postfix_expr INC  */
+#line 891 "parser.y"
+      {
+          NebulaType t = incdec_type((yyvsp[-1].expr).type, "++", line_no);
+          (yyval.expr) = make_expr(t, new_ast_unary(AST_UNARYOP, "post++", (yyvsp[-1].expr).node, t));
+      }
+#line 2824 "parser.tab.c"
+    break;
+
+  case 116: /* postfix_expr: postfix_expr DECREMENT  */
+#line 896 "parser.y"
+      {
+          NebulaType t = incdec_type((yyvsp[-1].expr).type, "--", line_no);
+          (yyval.expr) = make_expr(t, new_ast_unary(AST_UNARYOP, "post--", (yyvsp[-1].expr).node, t));
+      }
+#line 2833 "parser.tab.c"
+    break;
+
+  case 117: /* postfix_expr: postfix_expr LBRACKET expression RBRACKET  */
+#line 901 "parser.y"
+      {
+          ASTNode *idx = new_ast_binary(AST_BINOP, "[]", (yyvsp[-3].expr).node, (yyvsp[-1].expr).node, (yyvsp[-3].expr).type);
+          if ((yyvsp[-1].expr).type != TYPE_NUM) {
+              semantic_error(line_no, "Array index must be num, found %s", type_name((yyvsp[-1].expr).type));
+          }
+          (yyval.expr) = make_expr((yyvsp[-3].expr).type, idx);
+      }
+#line 2845 "parser.tab.c"
+    break;
+
+  case 118: /* primary_expr: IDENTIFIER  */
+#line 912 "parser.y"
+      {
+          NebulaType t = resolve_identifier_type((yyvsp[0].str_val), line_no);
+          ASTNode *id = new_ast_node(AST_IDENTIFIER, (yyvsp[0].str_val));
+          id->inferred_type = t;
+          (yyval.expr) = make_expr(t, id);
+          free((yyvsp[0].str_val));
+      }
+#line 2857 "parser.tab.c"
+    break;
+
+  case 119: /* primary_expr: NUM_LITERAL  */
+#line 920 "parser.y"
+      {
+          char buf[64];
+          snprintf(buf, sizeof(buf), "%d", (yyvsp[0].num_val));
+          (yyval.expr) = make_expr(TYPE_NUM, new_ast_node(AST_LITERAL, buf));
+      }
+#line 2867 "parser.tab.c"
+    break;
+
+  case 120: /* primary_expr: DEC_LITERAL  */
+#line 926 "parser.y"
+      {
+          char buf[64];
+          snprintf(buf, sizeof(buf), "%g", (yyvsp[0].dec_val));
+          (yyval.expr) = make_expr(TYPE_DEC, new_ast_node(AST_LITERAL, buf));
+      }
+#line 2877 "parser.tab.c"
+    break;
+
   case 121: /* primary_expr: CHAR_LITERAL  */
-#line 526 "parser.y"
-        { (yyval.type_val) = TYPE_CHAR; }
-#line 2268 "parser.tab.c"
+#line 932 "parser.y"
+      {
+          char buf[8];
+          snprintf(buf, sizeof(buf), "'%c'", (yyvsp[0].char_val));
+          (yyval.expr) = make_expr(TYPE_CHAR, new_ast_node(AST_LITERAL, buf));
+      }
+#line 2887 "parser.tab.c"
     break;
 
   case 122: /* primary_expr: STRING_LITERAL  */
-#line 528 "parser.y"
-        {
-            (yyval.type_val) = TYPE_UNKNOWN;
-            free((yyvsp[0].str_val));
-        }
-#line 2277 "parser.tab.c"
+#line 938 "parser.y"
+      {
+          (yyval.expr) = make_expr(TYPE_UNKNOWN, new_ast_node(AST_LITERAL, (yyvsp[0].str_val)));
+          free((yyvsp[0].str_val));
+      }
+#line 2896 "parser.tab.c"
     break;
 
   case 123: /* primary_expr: TRUE  */
-#line 533 "parser.y"
-        { (yyval.type_val) = TYPE_BOOL; }
-#line 2283 "parser.tab.c"
+#line 943 "parser.y"
+      {
+          (yyval.expr) = make_expr(TYPE_BOOL, new_ast_node(AST_LITERAL, "true"));
+      }
+#line 2904 "parser.tab.c"
     break;
 
   case 124: /* primary_expr: FALSE  */
-#line 535 "parser.y"
-        { (yyval.type_val) = TYPE_BOOL; }
-#line 2289 "parser.tab.c"
+#line 947 "parser.y"
+      {
+          (yyval.expr) = make_expr(TYPE_BOOL, new_ast_node(AST_LITERAL, "false"));
+      }
+#line 2912 "parser.tab.c"
     break;
 
   case 125: /* primary_expr: function_call  */
-#line 537 "parser.y"
-        { (yyval.type_val) = TYPE_UNKNOWN; }
-#line 2295 "parser.tab.c"
+#line 951 "parser.y"
+      {
+          (yyval.expr) = make_expr(TYPE_UNKNOWN, (yyvsp[0].node));
+      }
+#line 2920 "parser.tab.c"
     break;
 
   case 126: /* primary_expr: INPUT LPAREN RPAREN  */
-#line 539 "parser.y"
-        { (yyval.type_val) = TYPE_UNKNOWN; }
-#line 2301 "parser.tab.c"
+#line 955 "parser.y"
+      {
+          (yyval.expr) = make_expr(TYPE_UNKNOWN, new_ast_node(AST_INPUT, "input"));
+      }
+#line 2928 "parser.tab.c"
     break;
 
   case 127: /* primary_expr: LPAREN expression RPAREN  */
-#line 541 "parser.y"
-        { (yyval.type_val) = (yyvsp[-1].type_val); }
-#line 2307 "parser.tab.c"
+#line 959 "parser.y"
+      {
+          (yyval.expr) = (yyvsp[-1].expr);
+      }
+#line 2936 "parser.tab.c"
     break;
 
 
-#line 2311 "parser.tab.c"
+#line 2940 "parser.tab.c"
 
       default: break;
     }
@@ -2531,7 +3160,7 @@ yyreturnlab:
   return yyresult;
 }
 
-#line 544 "parser.y"
+#line 964 "parser.y"
 
 
 void yyerror(const char *msg) {
@@ -2554,10 +3183,14 @@ int main(int argc, char **argv) {
 
     if (yyparse() == 0 && nebula_lex_error == 0 && nebula_parse_error == 0 && semantic_error_count == 0) {
         printf("Parse success: Nebula source is syntactically valid.\n");
+        if (ast_root) {
+            printf("AST generated successfully.\n");
+            print_ast(ast_root, 0);
+        }
         return 0;
     }
 
-    printf("Parse failure: Nebula source has syntax errors.\n");
+    printf("Parse failure: Nebula source has syntax/semantic errors.\n");
     return 1;
 }
 
@@ -2792,5 +3425,113 @@ static void check_condition_type(NebulaType cond_type, int line, const char *kw)
     }
     if (!is_truthy_compatible(cond_type)) {
         semantic_error(line, "Condition in %s must be bool/num/dec, found %s", kw, type_name(cond_type));
+    }
+}
+
+static ExprAttr make_expr(NebulaType type, ASTNode *node) {
+    ExprAttr out;
+    out.type = type;
+    out.node = node;
+    if (node) {
+        node->inferred_type = type;
+    }
+    return out;
+}
+
+static ASTNode *new_ast_node(ASTNodeType kind, const char *text) {
+    ASTNode *node = (ASTNode *)calloc(1, sizeof(ASTNode));
+    if (!node) {
+        fprintf(stderr, "Fatal: out of memory while creating AST node.\n");
+        exit(2);
+    }
+    node->kind = kind;
+    node->inferred_type = TYPE_UNKNOWN;
+    if (text) {
+        node->text = strdup(text);
+    }
+    return node;
+}
+
+static ASTNode *new_ast_unary(ASTNodeType kind, const char *op, ASTNode *child, NebulaType t) {
+    ASTNode *node = new_ast_node(kind, op);
+    node->left = child;
+    node->inferred_type = t;
+    return node;
+}
+
+static ASTNode *new_ast_binary(ASTNodeType kind, const char *op, ASTNode *lhs, ASTNode *rhs, NebulaType t) {
+    ASTNode *node = new_ast_node(kind, op);
+    node->left = lhs;
+    node->right = rhs;
+    node->inferred_type = t;
+    return node;
+}
+
+static ASTNode *append_node(ASTNode *list, ASTNode *node) {
+    ASTNode *curr;
+    if (!list) {
+        return node;
+    }
+    curr = list;
+    while (curr->next) {
+        curr = curr->next;
+    }
+    curr->next = node;
+    return list;
+}
+
+static const char *ast_kind_name(ASTNodeType kind) {
+    switch (kind) {
+        case AST_PROGRAM: return "PROGRAM";
+        case AST_STMT_LIST: return "STMT_LIST";
+        case AST_DECL: return "DECL";
+        case AST_ASSIGN: return "ASSIGN";
+        case AST_EXPR_STMT: return "EXPR_STMT";
+        case AST_IF: return "IF";
+        case AST_LOOP: return "LOOP";
+        case AST_WHILE: return "WHILE";
+        case AST_DO_WHILE: return "DO_WHILE";
+        case AST_FOR: return "FOR";
+        case AST_PRINT: return "PRINT";
+        case AST_INPUT: return "INPUT";
+        case AST_BINOP: return "BINOP";
+        case AST_UNARYOP: return "UNARYOP";
+        case AST_LITERAL: return "LITERAL";
+        case AST_IDENTIFIER: return "IDENTIFIER";
+        case AST_FUNC_CALL: return "FUNC_CALL";
+        default: return "UNKNOWN";
+    }
+}
+
+static void print_ast(const ASTNode *node, int indent) {
+    const ASTNode *curr = node;
+    int i;
+    while (curr) {
+        for (i = 0; i < indent; i++) {
+            printf("  ");
+        }
+        printf("%s", ast_kind_name(curr->kind));
+        if (curr->text) {
+            printf("(%s)", curr->text);
+        }
+        if (curr->inferred_type != TYPE_UNKNOWN) {
+            printf(" : %s", type_name(curr->inferred_type));
+        }
+        printf("\n");
+
+        if (curr->left) {
+            print_ast(curr->left, indent + 1);
+        }
+        if (curr->right) {
+            print_ast(curr->right, indent + 1);
+        }
+        if (curr->third) {
+            print_ast(curr->third, indent + 1);
+        }
+        if (curr->body) {
+            print_ast(curr->body, indent + 1);
+        }
+
+        curr = curr->next;
     }
 }

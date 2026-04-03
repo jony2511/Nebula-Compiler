@@ -1,0 +1,15 @@
+num a = 1;
+num b = 2;
+num c;
+
+c = a + b * 3;
+
+if (c > 5) {
+    c = c - 1;
+} else {
+    c = c + 1;
+}
+
+while (c < 10) {
+    c = c + 1;
+}

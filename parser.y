@@ -22,6 +22,39 @@ typedef enum {
     TYPE_VOID
 } NebulaType;
 
+typedef enum {
+    AST_PROGRAM = 0,
+    AST_STMT_LIST,
+    AST_DECL,
+    AST_ASSIGN,
+    AST_EXPR_STMT,
+    AST_IF,
+    AST_LOOP,
+    AST_WHILE,
+    AST_DO_WHILE,
+    AST_FOR,
+    AST_PRINT,
+    AST_INPUT,
+    AST_BINOP,
+    AST_UNARYOP,
+    AST_LITERAL,
+    AST_IDENTIFIER,
+    AST_FUNC_CALL
+} ASTNodeType;
+
+typedef struct ASTNode {
+    ASTNodeType kind;
+    NebulaType inferred_type;
+    char *text;
+    struct ASTNode *left;
+    struct ASTNode *right;
+    struct ASTNode *third;
+    struct ASTNode *body;
+    struct ASTNode *next;
+} ASTNode;
+
+typedef struct ExprAttr ExprAttr;
+
 typedef struct Symbol {
     char *name;
     NebulaType type;
@@ -32,6 +65,7 @@ typedef struct Symbol {
 static Symbol *symbol_table = NULL;
 static int current_scope = 0;
 static NebulaType current_decl_type = TYPE_UNKNOWN;
+static ASTNode *ast_root = NULL;
 
 static const char *type_name(NebulaType t);
 static int is_numeric(NebulaType t);
@@ -55,8 +89,24 @@ static NebulaType unary_bitnot_type(NebulaType t, int line);
 static NebulaType incdec_type(NebulaType t, const char *op, int line);
 static void check_condition_type(NebulaType cond_type, int line, const char *kw);
 
+static ExprAttr make_expr(NebulaType type, ASTNode *node);
+static ASTNode *new_ast_node(ASTNodeType kind, const char *text);
+static ASTNode *new_ast_unary(ASTNodeType kind, const char *op, ASTNode *child, NebulaType t);
+static ASTNode *new_ast_binary(ASTNodeType kind, const char *op, ASTNode *lhs, ASTNode *rhs, NebulaType t);
+static ASTNode *append_node(ASTNode *list, ASTNode *node);
+static void print_ast(const ASTNode *node, int indent);
+static const char *ast_kind_name(ASTNodeType kind);
+
 void yyerror(const char *msg);
 %}
+
+%code requires {
+    typedef struct ASTNode ASTNode;
+    typedef struct ExprAttr {
+        int type;
+        ASTNode *node;
+    } ExprAttr;
+}
 
 %define parse.error verbose
 
@@ -66,22 +116,21 @@ void yyerror(const char *msg);
     char char_val;
     char *str_val;
     int type_val;
+    ASTNode *node;
+    ExprAttr expr;
 }
 
-/* ---------- Typed literal/identifier tokens ---------- */
 %token <num_val> NUM_LITERAL
 %token <dec_val> DEC_LITERAL
 %token <char_val> CHAR_LITERAL
 %token <str_val> STRING_LITERAL IDENTIFIER
 
-/* ---------- Keywords ---------- */
 %token INT FLOAT DOUBLE NUM DEC CHAR BOOL VOID STRUCT ENUM
 %token IF ELSE SWITCH CASE DEFAULT WHILE DO FOR
 %token BREAK CONTINUE RETURN FUNCTION
 %token WHEN OTHERWISE LOOP GIVE PRINT INPUT
 %token TRUE FALSE
 
-/* ---------- Operators ---------- */
 %token INC DECREMENT
 %token EQ NEQ LE GE LT GT ASSIGN
 %token AND OR
@@ -92,21 +141,28 @@ void yyerror(const char *msg);
 %token QMARK COLON
 %token ARROW_R ARROW_L
 
-/* ---------- Delimiters ---------- */
 %token SEMICOLON COMMA
 %token LPAREN RPAREN LBRACE RBRACE LBRACKET RBRACKET
 
-/* ---------- Error token from lexer ---------- */
 %token INVALID
 
 %type <type_val> type_spec
-%type <type_val> opt_expr expression assignment_expr conditional_expr
-%type <type_val> logical_or_expr logical_and_expr
-%type <type_val> bitwise_or_expr bitwise_xor_expr bitwise_and_expr
-%type <type_val> equality_expr relational_expr shift_expr
-%type <type_val> additive_expr multiplicative_expr unary_expr postfix_expr primary_expr
 
-/* ---------- Precedence / associativity ---------- */
+%type <node> program translation_unit external_decl
+%type <node> function_def parameter_list_opt parameter_list parameter
+%type <node> compound_stmt stmt_list_opt stmt_list statement
+%type <node> declaration_stmt init_declarator_list init_declarator
+%type <node> expression_stmt selection_stmt loop_stmt jump_stmt io_stmt
+%type <node> case_clauses_opt case_clause default_clause_opt
+%type <node> print_arg_list_opt print_arg_list print_arg
+%type <node> function_call argument_list_opt argument_list
+
+%type <expr> opt_expr expression assignment_expr conditional_expr
+%type <expr> logical_or_expr logical_and_expr
+%type <expr> bitwise_or_expr bitwise_xor_expr bitwise_and_expr
+%type <expr> equality_expr relational_expr shift_expr
+%type <expr> additive_expr multiplicative_expr unary_expr postfix_expr primary_expr
+
 %nonassoc LOWER_THAN_OTHERWISE
 %nonassoc OTHERWISE ELSE
 
@@ -131,40 +187,77 @@ void yyerror(const char *msg);
 
 program
     : translation_unit
+      {
+          ast_root = new_ast_node(AST_PROGRAM, "program");
+          ast_root->left = $1;
+          $$ = ast_root;
+      }
     ;
 
 translation_unit
     : /* empty */
+      {
+          $$ = NULL;
+      }
     | translation_unit external_decl
+      {
+          $$ = append_node($1, $2);
+      }
     ;
 
 external_decl
     : function_def
+      {
+          $$ = $1;
+      }
     | statement
+      {
+          $$ = $1;
+      }
     ;
 
 function_def
     : FUNCTION type_spec IDENTIFIER LPAREN parameter_list_opt RPAREN compound_stmt
       {
+          ASTNode *fn = new_ast_node(AST_FUNC_CALL, $3);
+          fn->inferred_type = (NebulaType)$2;
+          fn->left = $5;
+          fn->body = $7;
+          $$ = fn;
           free($3);
       }
     ;
 
 parameter_list_opt
     : /* empty */
+      {
+          $$ = NULL;
+      }
     | parameter_list
+      {
+          $$ = $1;
+      }
     ;
 
 parameter_list
     : parameter
+      {
+          $$ = $1;
+      }
     | parameter_list COMMA parameter
+      {
+          $$ = append_node($1, $3);
+      }
     ;
 
 parameter
     : type_spec IDENTIFIER
-        {
-            free($2);
-        }
+      {
+          ASTNode *id = new_ast_node(AST_IDENTIFIER, $2);
+          id->inferred_type = (NebulaType)$1;
+          $$ = id;
+          free($2);
+      }
     ;
 
 type_spec
@@ -185,33 +278,70 @@ compound_stmt
       }
       stmt_list_opt RBRACE
       {
+          ASTNode *list = new_ast_node(AST_STMT_LIST, "block");
+          list->left = $3;
+          $$ = list;
           exit_scope();
       }
     ;
 
 stmt_list_opt
     : /* empty */
+      {
+          $$ = NULL;
+      }
     | stmt_list
+      {
+          $$ = $1;
+      }
     ;
 
 stmt_list
     : statement
+      {
+          $$ = $1;
+      }
     | stmt_list statement
+      {
+          $$ = append_node($1, $2);
+      }
     ;
 
 statement
     : declaration_stmt
+      {
+          $$ = $1;
+      }
     | expression_stmt
+      {
+          $$ = $1;
+      }
     | selection_stmt
+      {
+          $$ = $1;
+      }
     | loop_stmt
+      {
+          $$ = $1;
+      }
     | jump_stmt
+      {
+          $$ = $1;
+      }
     | io_stmt
+      {
+          $$ = $1;
+      }
     | compound_stmt
+      {
+          $$ = $1;
+      }
     | error SEMICOLON
-        {
-            fprintf(stderr, "Recovered from syntax error at line %d.\n", line_no);
-            yyerrok;
-        }
+      {
+          fprintf(stderr, "Recovered from syntax error at line %d.\n", line_no);
+          yyerrok;
+          $$ = NULL;
+      }
     ;
 
 declaration_stmt
@@ -220,325 +350,615 @@ declaration_stmt
           current_decl_type = (NebulaType)$1;
       }
       init_declarator_list SEMICOLON
+      {
+          $$ = $3;
+      }
     ;
 
 init_declarator_list
     : init_declarator
+      {
+          $$ = $1;
+      }
     | init_declarator_list COMMA init_declarator
+      {
+          $$ = append_node($1, $3);
+      }
     ;
 
 init_declarator
     : IDENTIFIER
-        {
-            declare_variable($1, current_decl_type, line_no);
-            free($1);
-        }
+      {
+          ASTNode *decl = new_ast_node(AST_DECL, $1);
+          decl->inferred_type = current_decl_type;
+          declare_variable($1, current_decl_type, line_no);
+          $$ = decl;
+          free($1);
+      }
     | IDENTIFIER ASSIGN expression
-        {
-            declare_variable($1, current_decl_type, line_no);
-            if (!is_assignment_compatible(current_decl_type, (NebulaType)$3)) {
-                semantic_error(line_no, "Type mismatch in declaration assignment (%s = %s)", type_name(current_decl_type), type_name((NebulaType)$3));
-            }
-            free($1);
-        }
+      {
+          ASTNode *decl = new_ast_node(AST_DECL, $1);
+          decl->inferred_type = current_decl_type;
+          decl->left = $3.node;
+          declare_variable($1, current_decl_type, line_no);
+          if (!is_assignment_compatible(current_decl_type, $3.type)) {
+              semantic_error(line_no, "Type mismatch in declaration assignment (%s = %s)", type_name(current_decl_type), type_name($3.type));
+          }
+          $$ = decl;
+          free($1);
+      }
     ;
 
 expression_stmt
     : expression SEMICOLON
+      {
+          ASTNode *st = new_ast_node(AST_EXPR_STMT, "expr");
+          st->left = $1.node;
+          $$ = st;
+      }
     | SEMICOLON
+      {
+          $$ = NULL;
+      }
     ;
 
 selection_stmt
-        : WHEN LPAREN expression RPAREN statement %prec LOWER_THAN_OTHERWISE
-            {
-                    check_condition_type((NebulaType)$3, line_no, "when");
-            }
-        | WHEN LPAREN expression RPAREN statement OTHERWISE statement
-            {
-                    check_condition_type((NebulaType)$3, line_no, "when");
-            }
-        | IF LPAREN expression RPAREN statement %prec LOWER_THAN_OTHERWISE
-            {
-                    check_condition_type((NebulaType)$3, line_no, "if");
-            }
-        | IF LPAREN expression RPAREN statement ELSE statement
-            {
-                    check_condition_type((NebulaType)$3, line_no, "if");
-            }
+    : WHEN LPAREN expression RPAREN statement %prec LOWER_THAN_OTHERWISE
+      {
+          ASTNode *node = new_ast_node(AST_IF, "when");
+          node->left = $3.node;
+          node->right = $5;
+          check_condition_type($3.type, line_no, "when");
+          $$ = node;
+      }
+    | WHEN LPAREN expression RPAREN statement OTHERWISE statement
+      {
+          ASTNode *node = new_ast_node(AST_IF, "when-otherwise");
+          node->left = $3.node;
+          node->right = $5;
+          node->third = $7;
+          check_condition_type($3.type, line_no, "when");
+          $$ = node;
+      }
+    | IF LPAREN expression RPAREN statement %prec LOWER_THAN_OTHERWISE
+      {
+          ASTNode *node = new_ast_node(AST_IF, "if");
+          node->left = $3.node;
+          node->right = $5;
+          check_condition_type($3.type, line_no, "if");
+          $$ = node;
+      }
+    | IF LPAREN expression RPAREN statement ELSE statement
+      {
+          ASTNode *node = new_ast_node(AST_IF, "if-else");
+          node->left = $3.node;
+          node->right = $5;
+          node->third = $7;
+          check_condition_type($3.type, line_no, "if");
+          $$ = node;
+      }
     | SWITCH LPAREN expression RPAREN LBRACE case_clauses_opt default_clause_opt RBRACE
+      {
+          ASTNode *node = new_ast_node(AST_IF, "switch");
+          node->left = $3.node;
+          node->right = $6;
+          node->third = $7;
+          $$ = node;
+      }
     ;
 
 case_clauses_opt
     : /* empty */
+      {
+          $$ = NULL;
+      }
     | case_clauses_opt case_clause
+      {
+          $$ = append_node($1, $2);
+      }
     ;
 
 case_clause
     : CASE expression COLON stmt_list_opt
+      {
+          ASTNode *node = new_ast_node(AST_IF, "case");
+          node->left = $2.node;
+          node->right = $4;
+          $$ = node;
+      }
     ;
 
 default_clause_opt
     : /* empty */
+      {
+          $$ = NULL;
+      }
     | DEFAULT COLON stmt_list_opt
+      {
+          ASTNode *node = new_ast_node(AST_IF, "default");
+          node->right = $3;
+          $$ = node;
+      }
     ;
 
 loop_stmt
-        : LOOP LPAREN opt_expr SEMICOLON opt_expr SEMICOLON opt_expr RPAREN statement
-            {
-                    if ((NebulaType)$5 != TYPE_UNKNOWN) {
-                            check_condition_type((NebulaType)$5, line_no, "loop");
-                    }
-            }
-        | WHILE LPAREN expression RPAREN statement
-            {
-                    check_condition_type((NebulaType)$3, line_no, "while");
-            }
+    : LOOP LPAREN opt_expr SEMICOLON opt_expr SEMICOLON opt_expr RPAREN statement
+      {
+          ASTNode *node = new_ast_node(AST_LOOP, "loop");
+          node->left = $3.node;
+          node->right = $5.node;
+          node->third = $7.node;
+          node->body = $9;
+          if ($5.type != TYPE_UNKNOWN) {
+              check_condition_type($5.type, line_no, "loop");
+          }
+          $$ = node;
+      }
+    | WHILE LPAREN expression RPAREN statement
+      {
+          ASTNode *node = new_ast_node(AST_WHILE, "while");
+          node->left = $3.node;
+          node->body = $5;
+          check_condition_type($3.type, line_no, "while");
+          $$ = node;
+      }
     | DO statement WHILE LPAREN expression RPAREN SEMICOLON
       {
-          check_condition_type((NebulaType)$5, line_no, "do-while");
+          ASTNode *node = new_ast_node(AST_DO_WHILE, "do-while");
+          node->left = $5.node;
+          node->body = $2;
+          check_condition_type($5.type, line_no, "do-while");
+          $$ = node;
       }
-        | FOR LPAREN opt_expr SEMICOLON opt_expr SEMICOLON opt_expr RPAREN statement
-            {
-                    if ((NebulaType)$5 != TYPE_UNKNOWN) {
-                            check_condition_type((NebulaType)$5, line_no, "for");
-                    }
-            }
+    | FOR LPAREN opt_expr SEMICOLON opt_expr SEMICOLON opt_expr RPAREN statement
+      {
+          ASTNode *node = new_ast_node(AST_FOR, "for");
+          node->left = $3.node;
+          node->right = $5.node;
+          node->third = $7.node;
+          node->body = $9;
+          if ($5.type != TYPE_UNKNOWN) {
+              check_condition_type($5.type, line_no, "for");
+          }
+          $$ = node;
+      }
     ;
 
 opt_expr
-    : /* empty */     { $$ = TYPE_UNKNOWN; }
-    | expression      { $$ = $1; }
+    : /* empty */
+      {
+          $$ = make_expr(TYPE_UNKNOWN, NULL);
+      }
+    | expression
+      {
+          $$ = $1;
+      }
     ;
 
 jump_stmt
     : GIVE expression SEMICOLON
+      {
+          ASTNode *node = new_ast_node(AST_UNARYOP, "give");
+          node->left = $2.node;
+          $$ = node;
+      }
     | RETURN expression SEMICOLON
+      {
+          ASTNode *node = new_ast_node(AST_UNARYOP, "return");
+          node->left = $2.node;
+          $$ = node;
+      }
     | BREAK SEMICOLON
+      {
+          $$ = new_ast_node(AST_UNARYOP, "break");
+      }
     | CONTINUE SEMICOLON
+      {
+          $$ = new_ast_node(AST_UNARYOP, "continue");
+      }
     ;
 
 io_stmt
     : PRINT LPAREN print_arg_list_opt RPAREN SEMICOLON
+      {
+          ASTNode *node = new_ast_node(AST_PRINT, "print");
+          node->left = $3;
+          $$ = node;
+      }
     | INPUT LPAREN IDENTIFIER RPAREN SEMICOLON
-        {
-            (void)resolve_identifier_type($3, line_no);
-            free($3);
-        }
+      {
+          ASTNode *node = new_ast_node(AST_INPUT, $3);
+          (void)resolve_identifier_type($3, line_no);
+          $$ = node;
+          free($3);
+      }
     ;
 
 print_arg_list_opt
     : /* empty */
+      {
+          $$ = NULL;
+      }
     | print_arg_list
+      {
+          $$ = $1;
+      }
     ;
 
 print_arg_list
     : print_arg
+      {
+          $$ = $1;
+      }
     | print_arg_list COMMA print_arg
+      {
+          $$ = append_node($1, $3);
+      }
     ;
 
 print_arg
     : expression
+      {
+          $$ = $1.node;
+      }
     ;
 
 function_call
     : IDENTIFIER LPAREN argument_list_opt RPAREN
-        {
-            /* Function symbols will be handled in later phases; keep type unknown for now. */
-            free($1);
-        }
+      {
+          ASTNode *call = new_ast_node(AST_FUNC_CALL, $1);
+          call->left = $3;
+          $$ = call;
+          free($1);
+      }
     ;
 
 argument_list_opt
     : /* empty */
+      {
+          $$ = NULL;
+      }
     | argument_list
+      {
+          $$ = $1;
+      }
     ;
 
 argument_list
     : expression
+      {
+          $$ = $1.node;
+      }
     | argument_list COMMA expression
+      {
+          $$ = append_node($1, $3.node);
+      }
     ;
 
 expression
     : assignment_expr
-        { $$ = $1; }
+      {
+          $$ = $1;
+      }
     ;
 
 assignment_expr
     : conditional_expr
-        { $$ = $1; }
+      {
+          $$ = $1;
+      }
     | IDENTIFIER ASSIGN assignment_expr
-        {
-            NebulaType lhs = resolve_identifier_type($1, line_no);
-            NebulaType rhs = (NebulaType)$3;
-            if (lhs != TYPE_UNKNOWN && rhs != TYPE_UNKNOWN && !is_assignment_compatible(lhs, rhs)) {
-                semantic_error(line_no, "Type mismatch in assignment (%s = %s)", type_name(lhs), type_name(rhs));
-            }
-            $$ = lhs;
-            free($1);
-        }
+      {
+          NebulaType lhs = resolve_identifier_type($1, line_no);
+          NebulaType rhs = $3.type;
+          ASTNode *id = new_ast_node(AST_IDENTIFIER, $1);
+          ASTNode *as = new_ast_node(AST_ASSIGN, "=");
+          as->left = id;
+          as->right = $3.node;
+          as->inferred_type = lhs;
+          if (lhs != TYPE_UNKNOWN && rhs != TYPE_UNKNOWN && !is_assignment_compatible(lhs, rhs)) {
+              semantic_error(line_no, "Type mismatch in assignment (%s = %s)", type_name(lhs), type_name(rhs));
+          }
+          $$ = make_expr(lhs, as);
+          free($1);
+      }
     ;
 
 conditional_expr
     : logical_or_expr
-        { $$ = $1; }
+      {
+          $$ = $1;
+      }
     | logical_or_expr QMARK expression COLON conditional_expr
-        {
-            check_condition_type((NebulaType)$1, line_no, "?:");
-            if (is_assignment_compatible((NebulaType)$3, (NebulaType)$5)) {
-                $$ = $3;
-            } else if (is_assignment_compatible((NebulaType)$5, (NebulaType)$3)) {
-                $$ = $5;
-            } else {
-                semantic_error(line_no, "Type mismatch in conditional expression (%s : %s)", type_name((NebulaType)$3), type_name((NebulaType)$5));
-                $$ = TYPE_UNKNOWN;
-            }
-        }
+      {
+          NebulaType out_type;
+          ASTNode *node = new_ast_node(AST_IF, "?:");
+          node->left = $1.node;
+          node->right = $3.node;
+          node->third = $5.node;
+          check_condition_type($1.type, line_no, "?:");
+          if (is_assignment_compatible($3.type, $5.type)) {
+              out_type = $3.type;
+          } else if (is_assignment_compatible($5.type, $3.type)) {
+              out_type = $5.type;
+          } else {
+              semantic_error(line_no, "Type mismatch in conditional expression (%s : %s)", type_name($3.type), type_name($5.type));
+              out_type = TYPE_UNKNOWN;
+          }
+          node->inferred_type = out_type;
+          $$ = make_expr(out_type, node);
+      }
     ;
 
 logical_or_expr
     : logical_and_expr
-        { $$ = $1; }
+      {
+          $$ = $1;
+      }
     | logical_or_expr OR logical_and_expr
-        { $$ = logical_result_type((NebulaType)$1, (NebulaType)$3, "||", line_no); }
+      {
+          NebulaType t = logical_result_type($1.type, $3.type, "||", line_no);
+          $$ = make_expr(t, new_ast_binary(AST_BINOP, "||", $1.node, $3.node, t));
+      }
     ;
 
 logical_and_expr
     : bitwise_or_expr
-        { $$ = $1; }
+      {
+          $$ = $1;
+      }
     | logical_and_expr AND bitwise_or_expr
-        { $$ = logical_result_type((NebulaType)$1, (NebulaType)$3, "&&", line_no); }
+      {
+          NebulaType t = logical_result_type($1.type, $3.type, "&&", line_no);
+          $$ = make_expr(t, new_ast_binary(AST_BINOP, "&&", $1.node, $3.node, t));
+      }
     ;
 
 bitwise_or_expr
     : bitwise_xor_expr
-        { $$ = $1; }
+      {
+          $$ = $1;
+      }
     | bitwise_or_expr BIT_OR bitwise_xor_expr
-        { $$ = bitwise_result_type((NebulaType)$1, (NebulaType)$3, "|", line_no); }
+      {
+          NebulaType t = bitwise_result_type($1.type, $3.type, "|", line_no);
+          $$ = make_expr(t, new_ast_binary(AST_BINOP, "|", $1.node, $3.node, t));
+      }
     ;
 
 bitwise_xor_expr
     : bitwise_and_expr
-        { $$ = $1; }
+      {
+          $$ = $1;
+      }
     | bitwise_xor_expr BIT_XOR bitwise_and_expr
-        { $$ = bitwise_result_type((NebulaType)$1, (NebulaType)$3, "^", line_no); }
+      {
+          NebulaType t = bitwise_result_type($1.type, $3.type, "^", line_no);
+          $$ = make_expr(t, new_ast_binary(AST_BINOP, "^", $1.node, $3.node, t));
+      }
     ;
 
 bitwise_and_expr
     : equality_expr
-        { $$ = $1; }
+      {
+          $$ = $1;
+      }
     | bitwise_and_expr BIT_AND equality_expr
-        { $$ = bitwise_result_type((NebulaType)$1, (NebulaType)$3, "&", line_no); }
+      {
+          NebulaType t = bitwise_result_type($1.type, $3.type, "&", line_no);
+          $$ = make_expr(t, new_ast_binary(AST_BINOP, "&", $1.node, $3.node, t));
+      }
     ;
 
 equality_expr
     : relational_expr
-        { $$ = $1; }
+      {
+          $$ = $1;
+      }
     | equality_expr EQ relational_expr
-        { $$ = equality_result_type((NebulaType)$1, (NebulaType)$3, "==", line_no); }
+      {
+          NebulaType t = equality_result_type($1.type, $3.type, "==", line_no);
+          $$ = make_expr(t, new_ast_binary(AST_BINOP, "==", $1.node, $3.node, t));
+      }
     | equality_expr NEQ relational_expr
-        { $$ = equality_result_type((NebulaType)$1, (NebulaType)$3, "!=", line_no); }
+      {
+          NebulaType t = equality_result_type($1.type, $3.type, "!=", line_no);
+          $$ = make_expr(t, new_ast_binary(AST_BINOP, "!=", $1.node, $3.node, t));
+      }
     ;
 
 relational_expr
     : shift_expr
-        { $$ = $1; }
+      {
+          $$ = $1;
+      }
     | relational_expr LT shift_expr
-        { $$ = relational_result_type((NebulaType)$1, (NebulaType)$3, "<", line_no); }
+      {
+          NebulaType t = relational_result_type($1.type, $3.type, "<", line_no);
+          $$ = make_expr(t, new_ast_binary(AST_BINOP, "<", $1.node, $3.node, t));
+      }
     | relational_expr GT shift_expr
-        { $$ = relational_result_type((NebulaType)$1, (NebulaType)$3, ">", line_no); }
+      {
+          NebulaType t = relational_result_type($1.type, $3.type, ">", line_no);
+          $$ = make_expr(t, new_ast_binary(AST_BINOP, ">", $1.node, $3.node, t));
+      }
     | relational_expr LE shift_expr
-        { $$ = relational_result_type((NebulaType)$1, (NebulaType)$3, "<=", line_no); }
+      {
+          NebulaType t = relational_result_type($1.type, $3.type, "<=", line_no);
+          $$ = make_expr(t, new_ast_binary(AST_BINOP, "<=", $1.node, $3.node, t));
+      }
     | relational_expr GE shift_expr
-        { $$ = relational_result_type((NebulaType)$1, (NebulaType)$3, ">=", line_no); }
+      {
+          NebulaType t = relational_result_type($1.type, $3.type, ">=", line_no);
+          $$ = make_expr(t, new_ast_binary(AST_BINOP, ">=", $1.node, $3.node, t));
+      }
     ;
 
 shift_expr
     : additive_expr
-        { $$ = $1; }
+      {
+          $$ = $1;
+      }
     | shift_expr LSHIFT additive_expr
-        { $$ = bitwise_result_type((NebulaType)$1, (NebulaType)$3, "<<", line_no); }
+      {
+          NebulaType t = bitwise_result_type($1.type, $3.type, "<<", line_no);
+          $$ = make_expr(t, new_ast_binary(AST_BINOP, "<<", $1.node, $3.node, t));
+      }
     | shift_expr RSHIFT additive_expr
-        { $$ = bitwise_result_type((NebulaType)$1, (NebulaType)$3, ">>", line_no); }
+      {
+          NebulaType t = bitwise_result_type($1.type, $3.type, ">>", line_no);
+          $$ = make_expr(t, new_ast_binary(AST_BINOP, ">>", $1.node, $3.node, t));
+      }
     ;
 
 additive_expr
     : multiplicative_expr
-        { $$ = $1; }
+      {
+          $$ = $1;
+      }
     | additive_expr PLUS multiplicative_expr
-        { $$ = arithmetic_result_type((NebulaType)$1, (NebulaType)$3, "+", line_no); }
+      {
+          NebulaType t = arithmetic_result_type($1.type, $3.type, "+", line_no);
+          $$ = make_expr(t, new_ast_binary(AST_BINOP, "+", $1.node, $3.node, t));
+      }
     | additive_expr MINUS multiplicative_expr
-        { $$ = arithmetic_result_type((NebulaType)$1, (NebulaType)$3, "-", line_no); }
+      {
+          NebulaType t = arithmetic_result_type($1.type, $3.type, "-", line_no);
+          $$ = make_expr(t, new_ast_binary(AST_BINOP, "-", $1.node, $3.node, t));
+      }
     ;
 
 multiplicative_expr
     : unary_expr
-        { $$ = $1; }
+      {
+          $$ = $1;
+      }
     | multiplicative_expr MUL unary_expr
-        { $$ = arithmetic_result_type((NebulaType)$1, (NebulaType)$3, "*", line_no); }
+      {
+          NebulaType t = arithmetic_result_type($1.type, $3.type, "*", line_no);
+          $$ = make_expr(t, new_ast_binary(AST_BINOP, "*", $1.node, $3.node, t));
+      }
     | multiplicative_expr DIV unary_expr
-        { $$ = arithmetic_result_type((NebulaType)$1, (NebulaType)$3, "/", line_no); }
+      {
+          NebulaType t = arithmetic_result_type($1.type, $3.type, "/", line_no);
+          $$ = make_expr(t, new_ast_binary(AST_BINOP, "/", $1.node, $3.node, t));
+      }
     ;
 
 unary_expr
     : postfix_expr
-        { $$ = $1; }
+      {
+          $$ = $1;
+      }
     | PLUS unary_expr %prec UPLUS
-        { $$ = unary_plus_minus_type((NebulaType)$2, "+", line_no); }
+      {
+          NebulaType t = unary_plus_minus_type($2.type, "+", line_no);
+          $$ = make_expr(t, new_ast_unary(AST_UNARYOP, "+", $2.node, t));
+      }
     | MINUS unary_expr %prec UMINUS
-        { $$ = unary_plus_minus_type((NebulaType)$2, "-", line_no); }
+      {
+          NebulaType t = unary_plus_minus_type($2.type, "-", line_no);
+          $$ = make_expr(t, new_ast_unary(AST_UNARYOP, "-", $2.node, t));
+      }
     | NOT unary_expr
-        { $$ = unary_not_type((NebulaType)$2, line_no); }
+      {
+          NebulaType t = unary_not_type($2.type, line_no);
+          $$ = make_expr(t, new_ast_unary(AST_UNARYOP, "!", $2.node, t));
+      }
     | BIT_NOT unary_expr
-        { $$ = unary_bitnot_type((NebulaType)$2, line_no); }
+      {
+          NebulaType t = unary_bitnot_type($2.type, line_no);
+          $$ = make_expr(t, new_ast_unary(AST_UNARYOP, "~", $2.node, t));
+      }
     | INC unary_expr
-        { $$ = incdec_type((NebulaType)$2, "++", line_no); }
+      {
+          NebulaType t = incdec_type($2.type, "++", line_no);
+          $$ = make_expr(t, new_ast_unary(AST_UNARYOP, "++", $2.node, t));
+      }
     | DECREMENT unary_expr
-        { $$ = incdec_type((NebulaType)$2, "--", line_no); }
+      {
+          NebulaType t = incdec_type($2.type, "--", line_no);
+          $$ = make_expr(t, new_ast_unary(AST_UNARYOP, "--", $2.node, t));
+      }
     ;
 
 postfix_expr
     : primary_expr
-        { $$ = $1; }
+      {
+          $$ = $1;
+      }
     | postfix_expr INC
-        { $$ = incdec_type((NebulaType)$1, "++", line_no); }
+      {
+          NebulaType t = incdec_type($1.type, "++", line_no);
+          $$ = make_expr(t, new_ast_unary(AST_UNARYOP, "post++", $1.node, t));
+      }
     | postfix_expr DECREMENT
-        { $$ = incdec_type((NebulaType)$1, "--", line_no); }
+      {
+          NebulaType t = incdec_type($1.type, "--", line_no);
+          $$ = make_expr(t, new_ast_unary(AST_UNARYOP, "post--", $1.node, t));
+      }
     | postfix_expr LBRACKET expression RBRACKET
-        {
-            if ((NebulaType)$3 != TYPE_NUM) {
-                semantic_error(line_no, "Array index must be num, found %s", type_name((NebulaType)$3));
-            }
-            $$ = $1;
-        }
+      {
+          ASTNode *idx = new_ast_binary(AST_BINOP, "[]", $1.node, $3.node, $1.type);
+          if ($3.type != TYPE_NUM) {
+              semantic_error(line_no, "Array index must be num, found %s", type_name($3.type));
+          }
+          $$ = make_expr($1.type, idx);
+      }
     ;
 
 primary_expr
     : IDENTIFIER
-        {
-            $$ = resolve_identifier_type($1, line_no);
-            free($1);
-        }
+      {
+          NebulaType t = resolve_identifier_type($1, line_no);
+          ASTNode *id = new_ast_node(AST_IDENTIFIER, $1);
+          id->inferred_type = t;
+          $$ = make_expr(t, id);
+          free($1);
+      }
     | NUM_LITERAL
-        { $$ = TYPE_NUM; }
+      {
+          char buf[64];
+          snprintf(buf, sizeof(buf), "%d", $1);
+          $$ = make_expr(TYPE_NUM, new_ast_node(AST_LITERAL, buf));
+      }
     | DEC_LITERAL
-        { $$ = TYPE_DEC; }
+      {
+          char buf[64];
+          snprintf(buf, sizeof(buf), "%g", $1);
+          $$ = make_expr(TYPE_DEC, new_ast_node(AST_LITERAL, buf));
+      }
     | CHAR_LITERAL
-        { $$ = TYPE_CHAR; }
+      {
+          char buf[8];
+          snprintf(buf, sizeof(buf), "'%c'", $1);
+          $$ = make_expr(TYPE_CHAR, new_ast_node(AST_LITERAL, buf));
+      }
     | STRING_LITERAL
-        {
-            $$ = TYPE_UNKNOWN;
-            free($1);
-        }
+      {
+          $$ = make_expr(TYPE_UNKNOWN, new_ast_node(AST_LITERAL, $1));
+          free($1);
+      }
     | TRUE
-        { $$ = TYPE_BOOL; }
+      {
+          $$ = make_expr(TYPE_BOOL, new_ast_node(AST_LITERAL, "true"));
+      }
     | FALSE
-        { $$ = TYPE_BOOL; }
+      {
+          $$ = make_expr(TYPE_BOOL, new_ast_node(AST_LITERAL, "false"));
+      }
     | function_call
-        { $$ = TYPE_UNKNOWN; }
+      {
+          $$ = make_expr(TYPE_UNKNOWN, $1);
+      }
     | INPUT LPAREN RPAREN
-        { $$ = TYPE_UNKNOWN; }
+      {
+          $$ = make_expr(TYPE_UNKNOWN, new_ast_node(AST_INPUT, "input"));
+      }
     | LPAREN expression RPAREN
-        { $$ = $2; }
+      {
+          $$ = $2;
+      }
     ;
 
 %%
@@ -563,10 +983,14 @@ int main(int argc, char **argv) {
 
     if (yyparse() == 0 && nebula_lex_error == 0 && nebula_parse_error == 0 && semantic_error_count == 0) {
         printf("Parse success: Nebula source is syntactically valid.\n");
+        if (ast_root) {
+            printf("AST generated successfully.\n");
+            print_ast(ast_root, 0);
+        }
         return 0;
     }
 
-    printf("Parse failure: Nebula source has syntax errors.\n");
+    printf("Parse failure: Nebula source has syntax/semantic errors.\n");
     return 1;
 }
 
@@ -801,5 +1225,113 @@ static void check_condition_type(NebulaType cond_type, int line, const char *kw)
     }
     if (!is_truthy_compatible(cond_type)) {
         semantic_error(line, "Condition in %s must be bool/num/dec, found %s", kw, type_name(cond_type));
+    }
+}
+
+static ExprAttr make_expr(NebulaType type, ASTNode *node) {
+    ExprAttr out;
+    out.type = type;
+    out.node = node;
+    if (node) {
+        node->inferred_type = type;
+    }
+    return out;
+}
+
+static ASTNode *new_ast_node(ASTNodeType kind, const char *text) {
+    ASTNode *node = (ASTNode *)calloc(1, sizeof(ASTNode));
+    if (!node) {
+        fprintf(stderr, "Fatal: out of memory while creating AST node.\n");
+        exit(2);
+    }
+    node->kind = kind;
+    node->inferred_type = TYPE_UNKNOWN;
+    if (text) {
+        node->text = strdup(text);
+    }
+    return node;
+}
+
+static ASTNode *new_ast_unary(ASTNodeType kind, const char *op, ASTNode *child, NebulaType t) {
+    ASTNode *node = new_ast_node(kind, op);
+    node->left = child;
+    node->inferred_type = t;
+    return node;
+}
+
+static ASTNode *new_ast_binary(ASTNodeType kind, const char *op, ASTNode *lhs, ASTNode *rhs, NebulaType t) {
+    ASTNode *node = new_ast_node(kind, op);
+    node->left = lhs;
+    node->right = rhs;
+    node->inferred_type = t;
+    return node;
+}
+
+static ASTNode *append_node(ASTNode *list, ASTNode *node) {
+    ASTNode *curr;
+    if (!list) {
+        return node;
+    }
+    curr = list;
+    while (curr->next) {
+        curr = curr->next;
+    }
+    curr->next = node;
+    return list;
+}
+
+static const char *ast_kind_name(ASTNodeType kind) {
+    switch (kind) {
+        case AST_PROGRAM: return "PROGRAM";
+        case AST_STMT_LIST: return "STMT_LIST";
+        case AST_DECL: return "DECL";
+        case AST_ASSIGN: return "ASSIGN";
+        case AST_EXPR_STMT: return "EXPR_STMT";
+        case AST_IF: return "IF";
+        case AST_LOOP: return "LOOP";
+        case AST_WHILE: return "WHILE";
+        case AST_DO_WHILE: return "DO_WHILE";
+        case AST_FOR: return "FOR";
+        case AST_PRINT: return "PRINT";
+        case AST_INPUT: return "INPUT";
+        case AST_BINOP: return "BINOP";
+        case AST_UNARYOP: return "UNARYOP";
+        case AST_LITERAL: return "LITERAL";
+        case AST_IDENTIFIER: return "IDENTIFIER";
+        case AST_FUNC_CALL: return "FUNC_CALL";
+        default: return "UNKNOWN";
+    }
+}
+
+static void print_ast(const ASTNode *node, int indent) {
+    const ASTNode *curr = node;
+    int i;
+    while (curr) {
+        for (i = 0; i < indent; i++) {
+            printf("  ");
+        }
+        printf("%s", ast_kind_name(curr->kind));
+        if (curr->text) {
+            printf("(%s)", curr->text);
+        }
+        if (curr->inferred_type != TYPE_UNKNOWN) {
+            printf(" : %s", type_name(curr->inferred_type));
+        }
+        printf("\n");
+
+        if (curr->left) {
+            print_ast(curr->left, indent + 1);
+        }
+        if (curr->right) {
+            print_ast(curr->right, indent + 1);
+        }
+        if (curr->third) {
+            print_ast(curr->third, indent + 1);
+        }
+        if (curr->body) {
+            print_ast(curr->body, indent + 1);
+        }
+
+        curr = curr->next;
     }
 }
