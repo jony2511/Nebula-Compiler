@@ -45,7 +45,7 @@
 extern int yydebug;
 #endif
 /* "%code requires" blocks.  */
-#line 103 "parser.y"
+#line 158 "parser.y"
 
     typedef struct ASTNode ASTNode;
     typedef struct ExprAttr {
@@ -145,7 +145,7 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 113 "parser.y"
+#line 168 "parser.y"
 
     int num_val;
     double dec_val;
