@@ -1,3 +1,0 @@
-num n = 10;
-char c = 'A';
-num r = n + c;

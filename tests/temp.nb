@@ -1,7 +1,12 @@
-num a = 10;
-a = a + 5;
-display(a);
-a = a * 2;
+num temp=0;
+num i,j;
+int n=5;
 
-display(a);
-display(nebula(a,0));
+loop (i=0;i<=n;i++)
+{
+    loop(j=0;j<=i;j++)
+    {
+      write('*');
+    }
+    display("");
+}

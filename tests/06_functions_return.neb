@@ -1,0 +1,17 @@
+function num add(num x, num y)
+{
+    give x + y;
+}
+
+function dec avg3(dec a, dec b, dec c)
+{
+    return (a + b + c) / 3;
+}
+
+num s = add(10, 5);
+dec m = avg3(2.5, 3.5, 4.5);
+
+display("sum:");
+display(s);
+display("avg:");
+display(m);

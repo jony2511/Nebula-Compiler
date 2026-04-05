@@ -1,0 +1,16 @@
+display("Hello, World!");
+
+task num adding(num a, num b)
+{
+    num temp=a+b;
+    give temp;
+}
+
+task num adding2(num a, num b)
+{
+    dec temp2=adding(a,b);
+    give temp2;
+}
+
+num res= adding2(5,15);
+display(res);

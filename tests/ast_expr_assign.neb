@@ -1,6 +1,0 @@
-num a = 10;
-num b = 20;
-num c;
-
-c = (a + b) * 2 - 5;
-print(c);

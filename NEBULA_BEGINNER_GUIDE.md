@@ -1,250 +1,812 @@
-# Nebula Beginner Guide (with C Comparison)
+# Nebula Language Learning Guide
 
-## 1. Syntax Diff First: Nebula vs C
+This is a complete beginner-to-advanced Nebula tutorial, organized step by step.
 
-If you know basic C, this is the fastest way to start Nebula.
+It is written to match the current Nebula implementation in this repository, so every syntax example is practical and runnable.
 
-| Concept | C | Nebula | What Changed |
-|---|---|---|---|
-| Integer type | `int` | `num` | Keyword changed |
-| Decimal type | `float` / `double` | `dec` | Nebula uses one decimal keyword |
-| Character type | `char` | `char` | Same |
-| Boolean type | `_Bool` / `bool` | `bool` | Same keyword idea |
-| If | `if (...)` | `when (...)` (or `if (...)`) | Nebula native style is `when` |
-| Else | `else` | `otherwise` (or `else`) | Nebula native style is `otherwise` |
-| Loop | `for`, `while` | `loop (...)` (also supports `for`, `while`) | Nebula native style is `loop` |
-| Return | `return expr;` | `give expr;` (also supports `return`) | Nebula native style is `give` |
-| Print | `printf(...)` | `display(...)` or `print(...)` | `display` is preferred alias |
-| Input | `scanf(...)` | `input(var);` | Simpler built-in input |
-| Function declaration | `int add(int a,int b){...}` | `task num add(num a, num b){...}` or `function ...` | `task` is preferred alias |
+## Table of Contents
 
-### Important differences from C in this project implementation
-
-- Use `display(...)` and `input(...)` (legacy `print(...)` also works), not `printf/scanf`.
-- Use `num` and `dec` instead of `int/float/double` in Nebula style.
-- Use `when/otherwise` and `loop` for native Nebula syntax.
-- Preferred file extension is `.nb` (legacy `.neb` still works).
-- Modulo `%` is not currently supported in your Nebula grammar.
+1. [Getting Started](#1-getting-started)
+2. [Nebula at a Glance](#2-nebula-at-a-glance)
+3. [Variables and Data Types](#3-variables-and-data-types)
+4. [Output and Input](#4-output-and-input)
+5. [Expressions and Operators](#5-expressions-and-operators)
+6. [Conditions and Branching](#6-conditions-and-branching)
+7. [Loops](#7-loops)
+8. [Functions](#8-functions)
+9. [Built-in Functions](#9-built-in-functions)
+10. [Time-History with nebula(variable, steps_back)](#10-time-history-with-nebulavariable-steps_back)
+11. [Inline Output (No Newline)](#11-inline-output-no-newline)
+12. [Mini Projects](#12-mini-projects)
+13. [Practice Exercises with Click-to-Show Output](#13-practice-exercises-with-click-to-show-output)
+14. [Common Errors and How to Fix Them](#14-common-errors-and-how-to-fix-them)
+15. [Quick Reference](#15-quick-reference)
 
 ---
 
-## 2. What Feels the Same as C
+## 1) Getting Started
 
-- Statements end with `;`
-- Blocks use `{ ... }`
-- Arithmetic operators: `+ - * /`
-- Comparisons: `== != < > <= >=`
-- Assignment: `=`
-- Expressions and precedence are C-like
+### 1.1 Build the compiler
+
+~~~powershell
+gcc -o nebula.exe parser.tab.c lex.yy.c ast.c semantic.c codegen.c -lm
+~~~
+
+### 1.2 Run a Nebula source file
+
+~~~powershell
+.\nebula.exe tests\01_types_and_arithmetic.nb
+~~~
+
+### 1.3 Generated C output location
+
+Generated C files are now written into output with the same base filename as the source.
+
+Example:
+
+- Source: tests/07_builtins_math.neb
+- Generated C: output/07_builtins_math.c
+
+Compile and run generated C:
+
+~~~powershell
+gcc -o output\07_builtins_math.exe output\07_builtins_math.c -lm
+.\output\07_builtins_math.exe
+~~~
 
 ---
 
-## 3. Your First Nebula Program
+## 2) Nebula at a Glance
 
-```nebula
-print("Hello, Nebula");
-```
+Nebula is a C-like language with simpler keywords and a built-in history feature.
+
+### 2.1 Core style
+
+- Type-first variable declarations
+- Braces for code blocks
+- Semicolon-terminated statements
+- Familiar control flow (if/else, switch, while/for/do)
+
+### 2.2 Nebula-native keywords and aliases
+
+- display and print (same behavior)
+- when and otherwise (if/else style)
+- loop keyword (plus while/for/do)
+- give and return (same behavior)
+- stop and break (same behavior)
+- task and function (same behavior)
+
+This means beginners can write Nebula-style code, while C-like users can still use familiar aliases.
 
 ---
 
-## 4. Variables and Types
+## 3) Variables and Data Types
 
-```nebula
+Nebula supports:
+
+- num: integer
+- dec: decimal (floating point)
+- char: character
+- bool: boolean
+- void: function return-only type
+
+### 3.1 Declare and initialize
+
+~~~nebula
 num age = 21;
 dec pi = 3.14;
 char grade = 'A';
-bool ok = true;
+bool passed = true;
+~~~
 
-print(age);
-print(pi);
-print(grade);
-print(ok);
-```
+### 3.2 Declare first, assign later
 
-### C comparison
+~~~nebula
+num count;
+count = 10;
+~~~
 
-C:
+### 3.3 Type compatibility (important)
 
-```c
-int age = 21;
-double pi = 3.14;
-char grade = 'A';
-_Bool ok = 1;
-```
+Current semantic rules allow:
 
-Nebula just changes type keywords and booleans are directly `true/false`.
+- same type assignment
+- num to dec assignment
+
+Current semantic rules reject:
+
+- dec to num assignment
+
+Example rejected by semantic analyzer:
+
+~~~nebula
+num n = 10;
+dec d = 2.5;
+n = d;
+~~~
 
 ---
 
-## 5. Input and Output
+## 4) Output and Input
 
-```nebula
+### 4.1 Standard output
+
+Use display or print.
+
+~~~nebula
+display("Hello");
+print("World");
+~~~
+
+Both add a newline at the end.
+
+### 4.2 Read from input
+
+~~~nebula
 num x;
-print("Enter x:");
+display("Enter x:");
 input(x);
-print(x);
-```
+display(x);
+~~~
 
-### C comparison
-
-C:
-
-```c
-int x;
-printf("Enter x: ");
-scanf("%d", &x);
-printf("%d\n", x);
-```
-
-Nebula removes format specifiers and pointer syntax for beginner-friendly input/output.
+Input must target a declared variable.
 
 ---
 
-## 6. Expressions and Assignment
+## 5) Expressions and Operators
 
-```nebula
+### 5.1 Arithmetic
+
+Supported:
+
+- + - * /
+
+~~~nebula
 num a = 10;
-num b = 5;
-num c;
+num b = 3;
+num c = a + b * 2;
+display(c);
+~~~
 
-c = (a + b) * 2;
-print(c);
-```
+Important:
+
+- Modulo (%) is not supported in current grammar.
+
+### 5.2 Comparison
+
+Supported:
+
+- < > <= >= == !=
+
+Result type: bool
+
+### 5.3 Logical
+
+Supported:
+
+- && || !
+
+### 5.4 Bitwise (num only)
+
+Supported:
+
+- & | ^ ~ << >>
+
+### 5.5 Increment and decrement
+
+Supported:
+
+- ++x, x++, --x, x--
+
+### 5.6 Ternary expression
+
+Supported syntax:
+
+- condition ? expr1 : expr2
+
+~~~nebula
+num x = 5;
+num y = 8;
+num maxv = (x > y) ? x : y;
+display(maxv);
+~~~
 
 ---
 
-## 7. Conditionals
+## 6) Conditions and Branching
 
-### Native Nebula style
+### 6.1 when / otherwise
 
-```nebula
-num marks = 72;
+~~~nebula
+num n = 12;
 
-when (marks >= 50) {
-    print("Pass");
-} otherwise {
-    print("Fail");
+when (even(n))
+{
+    display("even");
 }
-```
-
-### Also accepted (C-style alias)
-
-```nebula
-if (marks >= 50) {
-    print("Pass");
-} else {
-    print("Fail");
+otherwise
+{
+    display("odd");
 }
-```
+~~~
+
+### 6.2 if / else alias
+
+~~~nebula
+if (n > 10)
+{
+    display("greater than 10");
+}
+else
+{
+    display("10 or less");
+}
+~~~
+
+### 6.3 switch / case / default
+
+~~~nebula
+num code = 2;
+
+switch (code)
+{
+    case 1:
+        display("one");
+        break;
+    case 2:
+        display("two");
+        break;
+    default:
+        display("other");
+}
+~~~
 
 ---
 
-## 8. Loops
+## 7) Loops
 
-### A) Nebula condition loop
+Nebula supports all major loop styles.
 
-```nebula
+### 7.1 while loop
+
+~~~nebula
 num i = 1;
-loop (i <= 3) {
-    print(i);
-    i = i + 1;
-}
-```
-
-### B) C-like loop form also supported
-
-```nebula
-num j;
-loop (j = 0; j < 3; j = j + 1) {
-    print(j);
-}
-```
-
----
-
-## 9. Functions
-
-```nebula
-function num add(num x, num y) {
-    give x + y;
-}
-
-num ans = add(10, 5);
-print(ans);
-```
-
-### C comparison
-
-C:
-
-```c
-int add(int x, int y) {
-    return x + y;
-}
-```
-
-Nebula uses `function` and `give` for native style.
-
----
-
-## 10. Full Beginner Example
-
-```nebula
 num sum = 0;
-num i = 1;
 
-loop (i <= 5) {
+while (i <= 5)
+{
     sum = sum + i;
     i = i + 1;
 }
 
-print(sum);
-```
+display(sum);
+~~~
 
-Expected output:
+### 7.2 for loop
 
-```text
+~~~nebula
+num k = 1;
+num sum_for = 0;
+
+for (k = 1; k <= 4; k = k + 1)
+{
+    sum_for = sum_for + k;
+}
+
+display(sum_for);
+~~~
+
+### 7.3 do-while loop
+
+~~~nebula
+num j = 0;
+do
+{
+    display(j);
+    j = j + 1;
+}
+while (j < 3);
+~~~
+
+### 7.4 loop keyword
+
+Condition style:
+
+~~~nebula
+num t = 0;
+loop (t < 3)
+{
+    display(t);
+    t = t + 1;
+}
+~~~
+
+For-like style:
+
+~~~nebula
+num i;
+loop (i = 0; i <= 5; i++)
+{
+    display(i);
+}
+~~~
+
+### 7.5 stop or break, continue
+
+~~~nebula
+num i = 0;
+
+for (i = 0; i < 10; i = i + 1)
+{
+    if (i == 2)
+    {
+        continue;
+    }
+
+    if (i == 7)
+    {
+        stop;
+    }
+
+    display(i);
+}
+~~~
+
+---
+
+## 8) Functions
+
+### 8.1 Define functions
+
+You can use function or task.
+
+~~~nebula
+function num add(num x, num y)
+{
+    give x + y;
+}
+~~~
+
+Equivalent style:
+
+~~~nebula
+task num add(num x, num y)
+{
+    return x + y;
+}
+~~~
+
+### 8.2 Call functions
+
+~~~nebula
+num s = add(10, 5);
+display(s);
+~~~
+
+### 8.3 Parameters and return type
+
+Function signature has:
+
+- keyword (function or task)
+- return type
+- function name
+- typed parameters
+
+Example with dec:
+
+~~~nebula
+task dec avg3(dec a, dec b, dec c)
+{
+    return (a + b + c) / 3;
+}
+~~~
+
+---
+
+## 9) Built-in Functions
+
+Available built-ins:
+
+- even(x) -> bool
+- odd(x) -> bool
+- factorial(n) -> num
+- prime(n) -> bool
+- palindrome(x) -> bool
+- leap_year(y) -> bool
+- power(base, exp) -> dec
+- sin(x) -> dec
+- cos(x) -> dec
+- tan(x) -> dec
+- nebula(variable, steps_back) -> num
+
+Trigonometry note:
+
+- sin, cos, tan interpret input as degrees.
+
+~~~nebula
+display(even(10));
+display(prime(29));
+display(palindrome("level"));
+display(power(3, 4));
+
+dec angle = 30;
+display(sin(angle));
+display(cos(angle));
+display(tan(angle));
+~~~
+
+---
+
+## 10) Time-History with nebula(variable, steps_back)
+
+Nebula tracks previous values for num variables.
+
+### 10.1 Signature
+
+~~~text
+nebula(variable, steps_back)
+~~~
+
+### 10.2 Meaning
+
+- 0 means current value
+- 1 means previous value
+- 2 means two updates back
+
+### 10.3 Rules
+
+- First argument must be a variable name (identifier).
+- History tracking is for num variables.
+- History buffer size is 10 values.
+
+~~~nebula
+num a = 10;
+a = a + 5;
+a = a * 2;
+
+display(nebula(a, 0));
+display(nebula(a, 1));
+display(nebula(a, 2));
+~~~
+
+Expected:
+
+~~~text
+30
 15
-```
+10
+~~~
 
 ---
 
-## 11. Common Beginner Mistakes
+## 11) Inline Output (No Newline)
 
-1. Missing semicolon:
-- Wrong: `print("hi")`
-- Correct: `print("hi");`
+Use these when you do not want automatic newline:
 
-2. Using variable before declaration:
-- Wrong: `x = 5; num x;`
-- Correct: `num x; x = 5;`
+- display_inline(...)
+- print_inline(...)
+- write(...)
 
-3. Type mismatch:
-- Example: adding `num` and unsupported/non-numeric types in arithmetic.
+~~~nebula
+num i;
+num n = 5;
 
-4. Writing C I/O directly:
-- Wrong: `printf`, `scanf`
-- Correct: `print`, `input`
+loop (i = 0; i <= n; i++)
+{
+    display_inline('*');
+}
 
-5. Using unsupported operators in this grammar (like `%`).
+display("");
+display("done");
+~~~
+
+Output:
+
+~~~text
+******
+done
+~~~
 
 ---
 
-## 12. Practice Tasks
+## 12) Mini Projects
 
-1. Write a program to input 2 numbers and print the larger one.
-2. Write a loop program to print 1 to 10.
-3. Write a function `square(num x)` and print `square(7)`.
-4. Write a Celsius-to-Fahrenheit converter using `dec`.
+### Project A: Number classifier
+
+Goal:
+
+- Read one number
+- Print if even/odd
+- Print if prime/not prime
+
+### Project B: History tracker demo
+
+Goal:
+
+- Update variable several times
+- Print last three states using nebula
+
+### Project C: Pattern printer
+
+Goal:
+
+- Print stars in one line and multi-line forms
+- Use display_inline and display
 
 ---
 
-## 13. Quick Cheat Sheet
+## 13) Practice Exercises with Click-to-Show Output
 
-```text
-Types: num dec char bool
-I/O: print(...), input(var)
-Condition: when (...) { ... } otherwise { ... }
-Loop: loop (condition) { ... }
-Function: function type name(params) { give expr; }
-```
+Use these as W3Schools-style practice items.
+
+### Exercise 1: Variables and output
+
+~~~nebula
+num score = 95;
+dec ratio = 1.25;
+char letter = 'A';
+bool passed = true;
+
+display(score);
+display(ratio);
+display(letter);
+display(passed);
+~~~
+
+<details>
+<summary>Show output</summary>
+
+~~~text
+95
+1.25
+A
+true
+~~~
+
+</details>
+
+### Exercise 2: Arithmetic and precedence
+
+~~~nebula
+num a = 10;
+num b = 3;
+num c = a + b * 2;
+display(c);
+~~~
+
+<details>
+<summary>Show output</summary>
+
+~~~text
+16
+~~~
+
+</details>
+
+### Exercise 3: Branching
+
+~~~nebula
+num x = 17;
+
+when (x < 10)
+{
+    display("small");
+}
+otherwise
+{
+    display("big");
+}
+~~~
+
+<details>
+<summary>Show output</summary>
+
+~~~text
+big
+~~~
+
+</details>
+
+### Exercise 4: for loop sum
+
+~~~nebula
+num i = 1;
+num sum = 0;
+
+for (i = 1; i <= 5; i = i + 1)
+{
+    sum = sum + i;
+}
+
+display(sum);
+~~~
+
+<details>
+<summary>Show output</summary>
+
+~~~text
+15
+~~~
+
+</details>
+
+### Exercise 5: Functions
+
+~~~nebula
+task num square(num n)
+{
+    return n * n;
+}
+
+display(square(9));
+~~~
+
+<details>
+<summary>Show output</summary>
+
+~~~text
+81
+~~~
+
+</details>
+
+### Exercise 6: Built-ins
+
+~~~nebula
+display(even(10));
+display(odd(10));
+display(factorial(5));
+display(prime(29));
+~~~
+
+<details>
+<summary>Show output</summary>
+
+~~~text
+true
+false
+120
+true
+~~~
+
+</details>
+
+### Exercise 7: History feature
+
+~~~nebula
+num a = 10;
+a = a + 5;
+a = a * 2;
+
+display(nebula(a, 0));
+display(nebula(a, 1));
+display(nebula(a, 2));
+~~~
+
+<details>
+<summary>Show output</summary>
+
+~~~text
+30
+15
+10
+~~~
+
+</details>
+
+### Exercise 8: Inline output
+
+~~~nebula
+num i;
+for (i = 0; i < 5; i = i + 1)
+{
+    display_inline('#');
+}
+display("");
+~~~
+
+<details>
+<summary>Show output</summary>
+
+~~~text
+#####
+~~~
+
+</details>
+
+---
+
+## 14) Common Errors and How to Fix Them
+
+### Error A: Variable used before declaration
+
+Message pattern:
+
+- Variable name used before declaration
+
+Fix:
+
+- Declare first, use later.
+
+### Error B: Type mismatch in assignment
+
+~~~nebula
+num n = 10;
+dec d = 2.5;
+n = d;
+~~~
+
+Fix:
+
+- Keep assignment compatible with current semantic rules.
+
+### Error C: Unsupported operator
+
+Example:
+
+- % modulo not supported by current grammar.
+
+Fix:
+
+- Redesign logic with supported operators or built-ins.
+
+### Error D: Wrong nebula first argument
+
+Wrong:
+
+~~~nebula
+display(nebula(a + 1, 1));
+~~~
+
+Correct:
+
+~~~nebula
+display(nebula(a, 1));
+~~~
+
+---
+
+## 15) Quick Reference
+
+### Types
+
+- num, dec, char, bool, void
+
+### Control flow
+
+- when/otherwise
+- if/else
+- switch/case/default
+- loop, while, for, do-while
+- stop or break, continue
+
+### Functions
+
+- task or function
+- give or return
+
+### I/O
+
+- display(...), print(...)
+- display_inline(...), print_inline(...), write(...)
+- input(variable)
+
+### Built-ins
+
+- even, odd, factorial, prime, palindrome, leap_year, power, sin, cos, tan, nebula
+
+### File extensions
+
+- preferred: .nb
+- supported: .neb
+
+---
+
+## Suggested Study Path
+
+1. Learn sections 2 to 5 and run small snippets.
+2. Practice branching and loops in sections 6 and 7.
+3. Learn reusable code with functions in section 8.
+4. Use built-ins and history in sections 9 and 10.
+5. Master formatting with inline output in section 11.
+6. Solve all exercises in section 13 before checking outputs.

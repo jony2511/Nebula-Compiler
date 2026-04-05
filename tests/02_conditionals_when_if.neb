@@ -1,0 +1,19 @@
+num n = 12;
+
+when (even(n))
+{
+    display("when: even");
+}
+otherwise
+{
+    display("when: odd");
+}
+
+if (n > 10)
+{
+    display("if: greater than 10");
+}
+else
+{
+    display("if: <= 10");
+}

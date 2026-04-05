@@ -1,0 +1,20 @@
+num a = 10;
+dec b = 2.5;
+char ch = 'Z';
+bool ok = true;
+
+num sum = a + 5;
+dec mix = b * 4 + a / 2;
+
+display("a:");
+display(a);
+display("b:");
+display(b);
+display("ch:");
+display(ch);
+display("ok:");
+display(ok);
+display("sum:");
+display(sum);
+display("mix:");
+display(mix);

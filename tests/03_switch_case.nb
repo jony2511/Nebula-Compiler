@@ -1,0 +1,13 @@
+num code = 2;
+
+switch (code)
+{
+    case 1:
+        display("one");
+        break;
+    case 2:
+        display("two");
+        break;
+    default:
+        display("other");
+}

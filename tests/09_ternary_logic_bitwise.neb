@@ -1,0 +1,21 @@
+num x = 5;
+num y = 8;
+
+num mx = (x > y) ? x : y;
+bool both = (x < y) && (y > 0);
+bool either = (x > 100) || (y == 8);
+
+num b_and = x & y;
+num b_or = x | y;
+num b_xor = x ^ y;
+
+display("mx:");
+display(mx);
+display("both:");
+display(both);
+display("either:");
+display(either);
+display("bitwise and/or/xor:");
+display(b_and);
+display(b_or);
+display(b_xor);

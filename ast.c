@@ -919,6 +919,7 @@ static ExecSignal runtime_exec_node(ASTNode *node) {
         case AST_PRINT: {
             ASTNode *arg = node->left;
             int first = 1;
+            int add_newline = !(node->text && strcmp(node->text, "print_inline") == 0);
             while (arg) {
                 RuntimeValue v = runtime_eval_expr(arg);
                 if (!first) printf(" ");
@@ -941,7 +942,9 @@ static ExecSignal runtime_exec_node(ASTNode *node) {
                 first = 0;
                 arg = arg->next;
             }
-            printf("\n");
+            if (add_newline) {
+                printf("\n");
+            }
             return sig;
         }
 

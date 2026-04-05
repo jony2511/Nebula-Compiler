@@ -1,6 +1,0 @@
-function num add(num p, num q) {
-    give p + q;
-}
-
-num ans = add(10, 5);
-print(ans);

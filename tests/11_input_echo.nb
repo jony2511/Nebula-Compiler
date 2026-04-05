@@ -1,0 +1,7 @@
+num v;
+
+display("enter a number:");
+input(v);
+
+display("you entered:");
+display(v);

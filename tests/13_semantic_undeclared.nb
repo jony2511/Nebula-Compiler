@@ -1,0 +1,4 @@
+num a = 5;
+
+// Intentional semantic error: variable b is undeclared.
+a = b + 1;

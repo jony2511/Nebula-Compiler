@@ -1,0 +1,22 @@
+num n = 5;
+
+display("pre++:");
+display(++n);
+display("post++:");
+display(n++);
+display("after post++:");
+display(n);
+
+display("pre--:");
+display(--n);
+display("post--:");
+display(n--);
+display("after post--:");
+display(n);
+
+display("bit not:");
+display(~n);
+display("left shift:");
+display(n << 2);
+display("right shift:");
+display(n >> 1);

@@ -1,0 +1,10 @@
+num i;
+num n = 5;
+
+loop (i = 0; i <= n; i++)
+{
+    display_inline('*');
+}
+
+display("");
+display("done");

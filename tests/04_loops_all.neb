@@ -1,0 +1,37 @@
+num i = 1;
+num sum_while = 0;
+while (i <= 3)
+{
+    sum_while = sum_while + i;
+    i = i + 1;
+}
+display("sum_while:");
+display(sum_while);
+
+num j = 0;
+num sum_do = 0;
+do
+{
+    sum_do = sum_do + j;
+    j = j + 1;
+} while (j < 4);
+display("sum_do:");
+display(sum_do);
+
+num sum_for = 0;
+num k = 1;
+for (k = 1; k <= 4; k = k + 1)
+{
+    sum_for = sum_for + k;
+}
+display("sum_for:");
+display(sum_for);
+
+num t = 0;
+num sum_loop = 0;
+loop (t = 1; t <= 3; t = t + 1)
+{
+    sum_loop = sum_loop + t;
+}
+display("sum_loop:");
+display(sum_loop);

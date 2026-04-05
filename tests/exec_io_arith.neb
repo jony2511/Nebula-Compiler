@@ -1,6 +1,0 @@
-num x;
-print("Enter x: ");
-input(x);
-num y = 5;
-num z = x + y * 2;
-print(z);

@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "ast.h"
+#include "codegen.h"
 #include "semantic.h"
 
 extern int yylex(void);
@@ -42,7 +43,7 @@ void yyerror(const char *msg);
 %token INT FLOAT DOUBLE NUM DEC CHAR BOOL VOID STRUCT ENUM
 %token IF ELSE SWITCH CASE DEFAULT WHILE DO FOR
 %token BREAK CONTINUE RETURN FUNCTION
-%token WHEN OTHERWISE LOOP GIVE PRINT INPUT
+%token WHEN OTHERWISE LOOP GIVE PRINT PRINT_INLINE INPUT
 %token NEBULA
 %token TRUE FALSE
 
@@ -494,6 +495,12 @@ io_stmt
           node->left = $3;
           $$ = node;
       }
+    | PRINT_INLINE LPAREN print_arg_list_opt RPAREN SEMICOLON
+      {
+          ASTNode *node = new_ast_node(AST_PRINT, "print_inline");
+          node->left = $3;
+          $$ = node;
+      }
     | INPUT LPAREN IDENTIFIER RPAREN SEMICOLON
       {
           ASTNode *node = new_ast_node(AST_INPUT, $3);
@@ -924,6 +931,7 @@ int main(int argc, char **argv) {
     if (yyparse() == 0 && nebula_lex_error == 0 && nebula_parse_error == 0 && semantic_error_count == 0) {
         printf("Parse success: Nebula source is syntactically valid.\n");
         if (ast_root) {
+        generate_c_code(ast_root, (argc > 1) ? argv[1] : NULL);
             execute_program(ast_root);
         }
         return 0;

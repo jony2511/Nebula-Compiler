@@ -45,7 +45,7 @@
 extern int yydebug;
 #endif
 /* "%code requires" blocks.  */
-#line 21 "parser.y"
+#line 22 "parser.y"
 
     #include "ast.h"
 
@@ -92,48 +92,49 @@ extern int yydebug;
     LOOP = 287,                    /* LOOP  */
     GIVE = 288,                    /* GIVE  */
     PRINT = 289,                   /* PRINT  */
-    INPUT = 290,                   /* INPUT  */
-    NEBULA = 291,                  /* NEBULA  */
-    TRUE = 292,                    /* TRUE  */
-    FALSE = 293,                   /* FALSE  */
-    INC = 294,                     /* INC  */
-    DECREMENT = 295,               /* DECREMENT  */
-    EQ = 296,                      /* EQ  */
-    NEQ = 297,                     /* NEQ  */
-    LE = 298,                      /* LE  */
-    GE = 299,                      /* GE  */
-    LT = 300,                      /* LT  */
-    GT = 301,                      /* GT  */
-    ASSIGN = 302,                  /* ASSIGN  */
-    AND = 303,                     /* AND  */
-    OR = 304,                      /* OR  */
-    BIT_AND = 305,                 /* BIT_AND  */
-    BIT_OR = 306,                  /* BIT_OR  */
-    BIT_XOR = 307,                 /* BIT_XOR  */
-    BIT_NOT = 308,                 /* BIT_NOT  */
-    LSHIFT = 309,                  /* LSHIFT  */
-    RSHIFT = 310,                  /* RSHIFT  */
-    PLUS = 311,                    /* PLUS  */
-    MINUS = 312,                   /* MINUS  */
-    MUL = 313,                     /* MUL  */
-    DIV = 314,                     /* DIV  */
-    NOT = 315,                     /* NOT  */
-    QMARK = 316,                   /* QMARK  */
-    COLON = 317,                   /* COLON  */
-    ARROW_R = 318,                 /* ARROW_R  */
-    ARROW_L = 319,                 /* ARROW_L  */
-    SEMICOLON = 320,               /* SEMICOLON  */
-    COMMA = 321,                   /* COMMA  */
-    LPAREN = 322,                  /* LPAREN  */
-    RPAREN = 323,                  /* RPAREN  */
-    LBRACE = 324,                  /* LBRACE  */
-    RBRACE = 325,                  /* RBRACE  */
-    LBRACKET = 326,                /* LBRACKET  */
-    RBRACKET = 327,                /* RBRACKET  */
-    INVALID = 328,                 /* INVALID  */
-    LOWER_THAN_OTHERWISE = 329,    /* LOWER_THAN_OTHERWISE  */
-    UMINUS = 330,                  /* UMINUS  */
-    UPLUS = 331                    /* UPLUS  */
+    PRINT_INLINE = 290,            /* PRINT_INLINE  */
+    INPUT = 291,                   /* INPUT  */
+    NEBULA = 292,                  /* NEBULA  */
+    TRUE = 293,                    /* TRUE  */
+    FALSE = 294,                   /* FALSE  */
+    INC = 295,                     /* INC  */
+    DECREMENT = 296,               /* DECREMENT  */
+    EQ = 297,                      /* EQ  */
+    NEQ = 298,                     /* NEQ  */
+    LE = 299,                      /* LE  */
+    GE = 300,                      /* GE  */
+    LT = 301,                      /* LT  */
+    GT = 302,                      /* GT  */
+    ASSIGN = 303,                  /* ASSIGN  */
+    AND = 304,                     /* AND  */
+    OR = 305,                      /* OR  */
+    BIT_AND = 306,                 /* BIT_AND  */
+    BIT_OR = 307,                  /* BIT_OR  */
+    BIT_XOR = 308,                 /* BIT_XOR  */
+    BIT_NOT = 309,                 /* BIT_NOT  */
+    LSHIFT = 310,                  /* LSHIFT  */
+    RSHIFT = 311,                  /* RSHIFT  */
+    PLUS = 312,                    /* PLUS  */
+    MINUS = 313,                   /* MINUS  */
+    MUL = 314,                     /* MUL  */
+    DIV = 315,                     /* DIV  */
+    NOT = 316,                     /* NOT  */
+    QMARK = 317,                   /* QMARK  */
+    COLON = 318,                   /* COLON  */
+    ARROW_R = 319,                 /* ARROW_R  */
+    ARROW_L = 320,                 /* ARROW_L  */
+    SEMICOLON = 321,               /* SEMICOLON  */
+    COMMA = 322,                   /* COMMA  */
+    LPAREN = 323,                  /* LPAREN  */
+    RPAREN = 324,                  /* RPAREN  */
+    LBRACE = 325,                  /* LBRACE  */
+    RBRACE = 326,                  /* RBRACE  */
+    LBRACKET = 327,                /* LBRACKET  */
+    RBRACKET = 328,                /* RBRACKET  */
+    INVALID = 329,                 /* INVALID  */
+    LOWER_THAN_OTHERWISE = 330,    /* LOWER_THAN_OTHERWISE  */
+    UMINUS = 331,                  /* UMINUS  */
+    UPLUS = 332                    /* UPLUS  */
   };
   typedef enum yytokentype yytoken_kind_t;
 #endif
@@ -142,7 +143,7 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 27 "parser.y"
+#line 28 "parser.y"
 
     int num_val;
     double dec_val;
@@ -152,7 +153,7 @@ union YYSTYPE
     ASTNode *node;
     ExprAttr expr;
 
-#line 156 "parser.tab.h"
+#line 157 "parser.tab.h"
 
 };
 typedef union YYSTYPE YYSTYPE;

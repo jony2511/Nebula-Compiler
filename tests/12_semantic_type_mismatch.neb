@@ -1,0 +1,5 @@
+num n = 10;
+dec d = 2.5;
+
+// Intentional semantic error: assigning dec to num without compatibility.
+n = d;

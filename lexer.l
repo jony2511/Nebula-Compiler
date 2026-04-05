@@ -74,6 +74,9 @@ WS              [ \t\r]+
 "give"              { return GIVE; }
 "print"             { return PRINT; }
 "display"           { return PRINT; }
+"print_inline"      { return PRINT_INLINE; }
+"display_inline"    { return PRINT_INLINE; }
+"write"             { return PRINT_INLINE; }
 "input"             { return INPUT; }
 "nebula"            { return NEBULA; }
 "true"              { return TRUE; }
